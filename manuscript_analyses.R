@@ -1,6 +1,6 @@
-model <- stan_model("~/code/legalmodels/transfunc1.stan")
-intmodel <- stan_model("~/code/legalmodels/transfunc1_interactions.stan")
-bardmodel <- stan_model("~/code/legalmodels/logistic.stan")
+model <- stan_model("models/transfunc1.stan")
+intmodel <- stan_model("models/transfunc1_interactions.stan")
+bardmodel <- stan_model("models/logistic.stan")
 basepars <- c("mu_alpha","mu_beta","sigma_alpha_subj","sigma_alpha_scen","sigma_beta_subj","sigma_beta_scen",
               "alpha_scen","beta_scen","alpha_subj","beta_subj","log_lik")
 rpars <- c("mu_alpha_resp","mu_beta_resp","mu_scale","sigma_scale","scale_subj","Yhat")
@@ -8,13 +8,13 @@ intpars <- c("sigma_mu_lambda","sigma_lambda_subj","mu_lambda","lambda_subj")
 evcond <- c("balanced","credible","defenseless")
 ratecond <- c("without","with")
 
-source("~/code/casereveal/analysis/miscfunctions.R")
-source("~/code/casereveal/analysis/prep_stan.R")
+source("miscfunctions.R")
+source("prep_stan.R")
 
 #### Experiment 1 #####
 
 whichtask <- "exculpatory_burdenofproof"
-source("~/code/casereveal/analysis/process_data.R")
+source("process_data.R")
 ldat <- makelegaldat(scendat,subjdat,clickdat)
 
 ##### split fits #####
@@ -136,7 +136,7 @@ marginaldiff <- marginaldiff[!((evbal==-3 & type == "Exculpatory") | (evbal==3 &
 
 #### Experiment 2 ####
 whichtask <- "exculpatory_conditional"
-source("~/code/casereveal/analysis/process_data.R")
+source("process_data.R")
 ldat_cond <- makelegaldat(scendat,subjdat,clickdat)
 setkey(ldat_cond,uid,question)
 
@@ -174,7 +174,7 @@ rlfit <- optimizing(rlmodel,rldat,as_vector=F)
 #### Experiment 3 ####
 
 whichtask <- "exculpatory_rateless"
-source("~/code/casereveal/analysis/process_data.R")
+source("process_data.R")
 ldat <- makelegaldat(scendat,subjdat,clickdat)
 
 bfit_rate <- list(list(),list())
