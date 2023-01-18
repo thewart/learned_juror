@@ -23,7 +23,10 @@ makelegaldat <- function(scendat,subjdat,clickdat,fthresh=NULL) {
     dat[cond_rating == "1", cond_rating:="with"]
     dat[cond_rating == "without", rating:=NA]
   }
-  
+  # are there trial types?
+  wcond <- str_subset(colnames(scendat),"cond")
+  # if (length(wcond)>0) dat <- merge(dat,scendat[,c("uid","scenario",wcond),with=F],by=c("uid","scenario"))
+  if ("cond_capstone" %in% wcond) dat[,cond_capstone:=(cond_capstone==1)]
   
   # orderize the evidence levels 
   evidord <- c("none", "clear_ex", "ambiguous", "clear_in")
@@ -37,7 +40,7 @@ makelegaldat <- function(scendat,subjdat,clickdat,fthresh=NULL) {
   dat[,stop:=as.POSIXct(stop)]
   
   if (!is.null(fthresh)) {
-    dat <- merge(dat,dat[,.(fst=anova(glm(bardguilt ~ rating))[2,2]),by=uid])
+    dat <- merge(dat,dat[,.(fst=anova(glm(bardguilt ~ rating,family=binomial))[2,2]),by=uid])
     dat <- dat[fst>fthresh]
   }
   return(dat)

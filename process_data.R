@@ -4,7 +4,7 @@
 # python ~/code/casereveal/analysis/process_data.py
 
 # whichtask <- "exculpatory_preponderous"
-fpath <- paste0("~/projects/learnedjuror/task/respdata/data", whichtask)
+fpath <- paste0("../data/", whichtask)
 
 catchdat <- fread(paste0(fpath, "_catches.csv"))
 clickdat <- fread(paste0(fpath, "_answers.csv"))
