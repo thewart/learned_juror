@@ -92,11 +92,11 @@ mvwnft <- function(data,ws,cond=NA) {
 }
 
 
-post_summary_dt <- function(samps,name = colnames(samps)) {
+post_summary_dt <- function(samps,name = colnames(samps), ci=.95) {
   if (length(dim(samps)) %in% c(0,1))
     samps <- matrix(samps,ncol=1)
-  return(data.table(mean=colMeans(samps),lb=apply(samps,2,quantile,prob=0.025),
-                    ub=apply(samps,2,quantile,prob=0.975),level=name))
+  return(data.table(mean=colMeans(samps),lb=apply(samps,2,quantile,prob=(1-ci)/2),
+                    ub=apply(samps,2,quantile,prob=0.5+ci/2),level=name))
 }
 
 

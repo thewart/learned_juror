@@ -1,19 +1,19 @@
 library(rstanarm)
 library(lme4)
 library(cowplot)
-source("~/code/casereveal/analysis/miscfunctions.R")
-source("~/code/casereveal/analysis/prep_stan.R")
+source("miscfunctions.R")
+source("prep_stan.R")
 evcond <- c("balanced","credible","defenseless")
 ratecond <- c("without","with")
 
-load("exp1_fitsplus.Rdata")
-load("exp2_fits.Rdata")
-load("exp3_fits.Rdata")
+load("../analysis/exp1_fitsplus.Rdata")
+load("../analysis/exp2_fits.Rdata")
+load("../analysis/exp3_fits.Rdata")
 
 colorscheme <- c("Baseline"="black","Inculpatory"="red","Exculpatory"="blue", "Ambiguous"="magenta")
 theme_set(theme_minimal_grid(font_size = 10))
 lsz <- 11
-figpath <- "presentation_figs/"
+figpath <- "../analysis/presentation_figs/"
 
 #### Marginal impact of evidence ####
 diff_plt <- ggplot(marginaldiff,aes(y=mean,x=evbal,ymin=lb,ymax=ub,color=type,shape=source,linetype=source)) + 
