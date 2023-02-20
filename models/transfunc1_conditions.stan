@@ -1,4 +1,15 @@
 functions {
+  real[] etaize(matrix X, int[] Subj, int[] Scen, int[] Cond, real[] mu_alpha, 
+                  vector alpha_subj, vector alpha_scen, vector[] mu_beta, vector[] beta_subj, vector[] beta_scen) {
+    
+    int N = num_elements(Subj);
+    real eta[N];
+    for (i in 1:N) {
+        eta[i] = mu_alpha[Cond[i]] + alpha_scen[Scen[i]] + alpha_subj[Subj[i]] + X[i]*(mu_beta[Cond[i]] + beta_scen[Scen[i]] + beta_subj[Subj[i]]);
+    }
+    return eta;
+  }
+  
   real inv_cdf(real p) {
     return inv_Phi(p);
   }
@@ -10,6 +21,7 @@ functions {
   real lccdf(real q, real mu, real sigma) {
     return logistic_lccdf(q | mu, sigma);
   }
+
   
   real[] Yhatify(real[] eta, vector scale, int[] Subj, int L, int U, int D) {
     int N = num_elements(eta);
@@ -34,13 +46,15 @@ data {
   int D; // distance between consecutive points on scale
   int<lower=0> Nsubj;  // number of subjects
   int<lower=0> Nscen;  // number of cases
+  int<lower=0> Ncond;  // number of conditions
   int<lower=0> N;  // number of observations
   int<lower=0> P;  // number of fixed + random effect regressors
   real<lower=L, upper=U> Y[N];  // ratings
   matrix[N, P] X;  // design matrix for fixed + random effects
-  int Z[N]; //intervention
   int<lower=0> Subj[N];  // subject corresponding to each rating
   int<lower=0> Scen[N];  // case corresponding to each rating
+  int<lower=0> Cond[N];  // condition for each rating
+  // int<lower=1> K;    //components of mixture transfer function
 }
 
 transformed data {
@@ -52,24 +66,19 @@ transformed data {
 }
 
 parameters {
-  real mu_alpha;
+  real mu_alpha[Ncond];
   real<lower=0> sigma_alpha_scen;
   real<lower=0> sigma_alpha_subj;
   
   vector[Nscen] alpha_scen_raw;
   vector[Nsubj] alpha_subj_raw;
 
-  vector[P] mu_beta;
+  vector[P] mu_beta[Ncond];
   vector<lower=0>[P] sigma_beta_scen;
   vector<lower=0>[P] sigma_beta_subj;
 
   vector[P] beta_scen_raw[Nscen];  // scenario effects
   vector[P] beta_subj_raw[Nsubj];  // subject residual effects
-  
-  vector[2] mu_lambda; //intervention effect
-  vector<lower=0>[2] sigma_lambda;
-  cholesky_factor_corr[2] L_lambda;
-  vector[2] lambda_subj_raw[Nsubj];
   
   real mu_scale;
   real<lower=0> sigma_scale;
@@ -79,60 +88,52 @@ parameters {
 transformed parameters {
   vector[P] beta_scen[Nscen];  // scenario effects
   vector[P] beta_subj[Nsubj];  // individual effects
-  vector[2] lambda_subj[Nsubj]; // individual intervention effects
   vector[Nscen] alpha_scen = sigma_alpha_scen * alpha_scen_raw;
   vector[Nsubj] alpha_subj = sigma_alpha_subj * alpha_subj_raw;
   vector[Nsubj] scale_subj = exp(mu_scale + sigma_scale * scale_subj_raw);
-  real log_lik[N];
   real eta[N];
+  real log_lik[N];
 
-
-  // random effects
-  for (i in 1:Nscen)
+  //random effects
+  for (i in 1:Nscen) 
     beta_scen[i] = sigma_beta_scen .* beta_scen_raw[i];
-  for (i in 1:Nsubj) {
+  for (i in 1:Nsubj)
     beta_subj[i] = sigma_beta_subj .* beta_subj_raw[i];
-    lambda_subj[i] = mu_lambda + diag_pre_multiply(sigma_lambda,L_lambda) * lambda_subj_raw[i];
-  }
   
-  for (i in 1:N) {
-    
-    real alpha = mu_alpha + alpha_subj[Subj[i]] + alpha_scen[Scen[i]];
-    vector[P] beta = mu_beta + beta_subj[Subj[i]] + beta_scen[Scen[i]];
-    eta[i] = alpha + Z[i]*lambda_subj[Subj[i]][1] + X[i]*beta + sum(X[i])*Z[i]*lambda_subj[Subj[i]][2];
+  // get linear predictor
+  eta = etaize(X, Subj, Scen, Cond, mu_alpha, alpha_subj, alpha_scen, mu_beta, beta_subj, beta_scen);
 
+  // eval log lik
+  for (i in 1:N) {
     if (Y[i] == L)
       log_lik[i] = lcdf(inv_cdf(I)*scale_subj[Subj[i]], eta[i], 1);
     else if (Y[i] == U)
       log_lik[i] = lccdf(inv_cdf(1-I)*scale_subj[Subj[i]], eta[i], 1);
     else
       log_lik[i] = log_diff_exp(lcdf(inv_cdf(Q[i]+I)*scale_subj[Subj[i]], eta[i], 1), lcdf(inv_cdf(Q[i]-I)*scale_subj[Subj[i]], eta[i], 1));
-  }
-  
+    }
 }
 
 model {
   
   target += sum(log_lik);
   
-  mu_alpha ~ normal(0,2.5);
+  for (c in 1:Ncond) {
+    mu_alpha[c] ~ normal(0,2.5);
+    mu_beta[c] ~ normal(0,2.5);
+  }
+  
   sigma_alpha_scen ~ normal(0,2);
   sigma_alpha_subj ~ normal(0,2);
   
-  mu_beta ~ normal(0,2.5);
   sigma_beta_scen ~ normal(0,2);
   sigma_beta_subj ~ normal(0,2);
-  
-  mu_lambda ~ normal(0,2.5);
-  sigma_lambda ~ normal(0,2);
   
   alpha_subj_raw ~ normal(0,1);
   alpha_scen_raw ~ normal(0,1);
   
-  for (i in 1:Nsubj) {
+  for (i in 1:Nsubj)
     beta_subj_raw[i] ~ normal(0,1);
-    lambda_subj_raw[i] ~ normal(0,1);
-  }
   for (i in 1:Nscen)
     beta_scen_raw[i] ~ normal(0,1);
   
@@ -143,14 +144,11 @@ model {
 
 generated quantities {
   real Yhat[N] = Yhatify(eta, scale_subj, Subj, L, U, D);
-  real mu_alpha_pre_resp = Phi(mu_alpha/exp(mu_scale + pow(sigma_scale,2)/2))*(U-L) + L;
-  real mu_alpha_post_resp = Phi((mu_alpha + mu_lambda[1])/exp(mu_scale + pow(sigma_scale,2)/2))*(U-L) + L;
-  real mu_beta_ave_pre_resp = (Phi(mean(mu_beta)/exp(mu_scale + pow(sigma_scale,2)/2)) - 0.5)*(U-L) + L;
-  real mu_beta_ave_post_resp = (Phi((mean(mu_beta) + mu_lambda[2])/exp(mu_scale + pow(sigma_scale,2)/2)) - 0.5)*(U-L) + L;
-  vector[P] mu_beta_pre_resp;
-  real mu_lambda_alpha_resp = (Phi(mu_lambda[1]/exp(mu_scale + pow(sigma_scale,2)/2)) - 0.5)*(U-L) + L;
-  real mu_lambda_beta_resp = (Phi(mu_lambda[2]/exp(mu_scale + pow(sigma_scale,2)/2)) - 0.5)*(U-L) + L;
-  real rho_lambda = (L_lambda * L_lambda')[2,1];
-
-  for (p in 1:P) mu_beta_pre_resp[p] = (Phi(mu_beta[p]/exp(mu_scale + pow(sigma_scale,2)/2)) - 0.5)*(U-L) + L;
+  real mu_alpha_resp[Ncond]; 
+  vector[P] mu_beta_resp[Ncond];
+  
+  for (c in 1:Ncond) {
+    mu_alpha_resp[c] = Phi(mu_alpha[c]/exp(mu_scale + pow(sigma_scale,2)/2))*(U-L) + L;
+    for (p in 1:P) mu_beta_resp[c][p] = (Phi(mu_beta[c][p]/exp(mu_scale + pow(sigma_scale,2)/2)) - 0.5)*(U-L) + L;
+  }
 }

@@ -1,4 +1,6 @@
+library(tidybayes)
 model <- stan_model("models/transfunc1.stan")
+condmodel <- stan_model("models/transfunc1_conditions.stan")
 intmodel <- stan_model("models/transfunc1_interactions.stan")
 bardmodel <- stan_model("models/logistic.stan")
 basepars <- c("mu_alpha","mu_beta","sigma_alpha_subj","sigma_alpha_scen","sigma_beta_subj","sigma_beta_scen",
@@ -7,6 +9,7 @@ rpars <- c("mu_alpha_resp","mu_beta_resp","mu_scale","sigma_scale","scale_subj",
 intpars <- c("sigma_mu_lambda","sigma_lambda_subj","mu_lambda","lambda_subj")
 evcond <- c("balanced","credible","defenseless")
 ratecond <- c("without","with")
+capcond <- c("pre","post")
 
 source("miscfunctions.R")
 source("prep_stan.R")
@@ -57,11 +60,6 @@ looout <- loo_compare(loo(rfit),loo(rfitint))
 expose_stan_functions(rfitint)
 cyhat <- postpredeta_cfact(c(extract(rfitint),standat),c("mu_lambda","lambda_subj"),
                               binint=T,list_out=T) %>% postpredyhat()
-
-##### Scenario weights ####
-expose_stan_functions(rfit)
-beta_scen_resp <- get_beta_scen_resp(rfit)
-alpha_scen_resp <- get_alpha_scen_resp(rfit)
 
 ##### Marginal impact of evidence ####
 library(rstanarm)
@@ -140,21 +138,29 @@ source("process_data.R")
 ldat_cond <- makelegaldat(scendat,subjdat,clickdat)
 setkey(ldat_cond,uid,question)
 
-rfitint_cond <- list()
-rfit_cond <- list()
-for (c in evcond) {
-  standat <- makestandat(ldat_cond[cond_evidence==c],interact = T)
-  rfit_cond[[c]] <- sampling(model,standat,chains=4,init=transfunc_init,iter=1000,warmup=500,
-                                pars=c(basepars,rpars))
-  rfitint_cond[[c]] <- sampling(intmodel,standat,chains=4,init=transfunc_init,iter=1000,warmup=500,
-                                   pars=c(basepars,rpars,intpars))
-}
+standat <- makestandat(ldat_cond,cond="cond_evidence")
+rfit_cond <- sampling(condmodel,standat,chains=4,iter=1000,warmup=500,pars=c(basepars,rpars))
+rfit_cond <- recover_types(rfit_cond,standat$ref)
 
-bfit_cond <- list()
-for (c in evcond) {
-  standat <- makestandat(ldat_cond[cond_evidence==c],binresp = T)
-  bfit_cond[[c]] <- sampling(bardmodel,standat,chains=4,iter=1000,warmup=500,pars=basepars)
-}
+# rfitint_cond <- list()
+# rfit_cond <- list()
+# for (c in evcond) {
+#   standat <- makestandat(ldat_cond[cond_evidence==c],interact = T)
+#   rfit_cond[[c]] <- sampling(model,standat,chains=4,init=transfunc_init,iter=1000,warmup=500,
+#                                 pars=c(basep ars,rpars))
+#   rfitint_cond[[c]] <- sampling(intmodel,standat,chains=4,init=transfunc_init,iter=1000,warmup=500,
+#                                    pars=c(basepars,rpars,intpars))
+# }
+
+standat <- makestandat(ldat_cond,binresp = T,cond="cond_evidence")
+bfit_cond <- sampling(condmodel,standat,chains=4,iter=1000,warmup=500,pars=basepars)
+
+# 
+# bfit_cond <- list()
+# for (c in evcond) {
+#   standat <- makestandat(ldat_cond[cond_evidence==c],binresp = T)
+#   bfit_cond[[c]] <- sampling(bardmodel,standat,chains=4,iter=1000,warmup=500,pars=basepars)
+# }
 
 ##### Time trend ####
 bdat_cond <- merge(ldat_cond,makebalancedat(ldat_cond),by=c("uid","scenario"))
@@ -171,7 +177,7 @@ rldat <- makestanrldat(ldat_cond)
 rlmodel <- stan_model("/home/seth/code/legalmodels/refcase_transfunc1_flat.stan")
 rlfit <- optimizing(rlmodel,rldat,as_vector=F)
 
-#### Experiment 3 ####
+#### Experiment 2b ####
 
 whichtask <- "exculpatory_rateless"
 source("process_data.R")
@@ -191,4 +197,30 @@ for (c in evcond) {
   standat <- makestandat(ldat[cond_evidence==c & cond_rating=="with"])
   rfit_rate[[c]] <- sampling(model,standat,chains=4,init=transfunc_init,iter=1000,warmup=500,
                              pars=c(basepars,rpars))
+}
+
+##### Experiment 3 ####
+intermodel <- stan_model("models/transfunc1_intervention.stan")
+bardintermodel <- stan_model("models/logistic_intervention.stan")
+whichtask <- "capstone_prolific"
+interpars <- c("mu_lambda","sigma_lambda","lambda_subj","rho_lambda")
+interratepars <- c("mu_lambda_alpha_resp","mu_lambda_beta_resp")
+source("process_data.R")
+ldat_cap <- makelegaldat(scendat,subjdat,clickdat)
+
+rfit_cap <- list()
+for (c in evcond[1:2]) {
+  standat <- makestandat(ldat_cap[cond_evidence==c])
+  standat$Z <- ldat_cap[cond_evidence==c,cond_capstone]
+  rfit_cap[[c]] <- sampling(intermodel,standat,chains=4,iter=1000,warmup=500,
+                            pars=c(basepars,rpars,interpars,interratepars),
+                            init=transfunc_init_intervention,control=list(adapt_delta=0.99))
+}
+
+bfit_cap <- list()
+for (c in evcond[1:2]) {
+  standat <- makestandat(ldat_cap[cond_evidence==c],binresp = T)
+  standat$Z <- ldat_cap[cond_evidence==c,cond_capstone]
+  bfit_cap[[c]] <- sampling(bardintermodel,standat,chains=4,iter=1000,warmup=500,
+                            control=list(adapt_delta=0.99),pars=c(basepars,interpars))
 }

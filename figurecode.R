@@ -79,6 +79,30 @@ weights_plt <- ggplot(effdt,aes(y=mean,x=type,color=level)) + geom_pointrange(ae
 #        weights_plt %+% effdt[level!="baseline"] + ylim(layer_scales(weights_plt)$y$get_limits()))
 # ggsave(paste0(figpath,"weights.pdf"), width = 8, height = 4, weights_plt)
 
+
+##### scenario effects ####
+samps <- extract(rfit,c("mu_alpha","mu_beta","alpha_scen","beta_scen","mu_scale","sigma_scale"))
+sceneffdat <- rbind(with(samps,sweep(alpha_scen,1,mu_alpha,"+") |> apply(2,pointscale,mu_scale,sigma_scale)) |>
+                      post_summary_dt(1:31) |> cbind(type="Baseline"),
+                    with(samps,sweep(apply(beta_scen,c(1,2),mean),1,rowMeans(mu_beta),"+") |> apply(2,pointscale,mu_scale,sigma_scale,T)) |>
+                      post_summary_dt(1:31) |> cbind(type="Evidence"))
+setnames(sceneffdat,"level","scenario")
+
+samps <- extract(rfit_cond$credible,c("mu_alpha","mu_beta","alpha_subj","beta_subj","mu_scale","sigma_scale"))
+avebeta_subj <- with(samps,sweep(apply(beta_subj,c(1,2),mean),1,rowMeans(mu_beta),"+") |> apply(2,pointscale,mu_scale,sigma_scale,T))
+alpha_subj <- with(samps,sweep(alpha_subj,1,mu_alpha,"+") |> apply(2,pointscale,mu_scale,sigma_scale))
+cor.test(colMeans(avebeta_subj_resp),colMeans(alpha_subj_resp))
+qplot(y=colMeans(avebeta_subj_resp),x=colMeans(alpha_subj_resp))
+rowMeans(apply(samps$beta_subj,c(1,2),mean) * samps$alpha_subj) |> qplot(bins=100)
+
+avebeta_dat <- post_summary_dt(avebeta_subj,1:ncol(avebeta_subj))
+names(avebeta_dat) <- c("beta_hat","beta_lb","beta_ub","subj")
+alpha_dat <- post_summary_dt(alpha_subj,1:ncol(alpha_subj))
+names(alpha_dat) <- c("alpha_hat","alpha_lb","alpha_ub","subj")
+alphabeta_dat <- alpha_dat[avebeta_dat,on="subj"]
+ggplot(alphabeta_dat,aes(y=beta_hat,x=alpha_hat)) + geom_point() + geom_errorbar(aes(ymin=beta_lb,ymax=beta_ub),width=0,alpha=0.25) + geom_errorbarh(aes(xmin=alpha_lb,xmax=alpha_ub),height=0,alpha=0.25)
+
+
 #### MEGAFIGURE ASSEMBLE ####
 task_plt <- ggdraw() + draw_image("task.png")
 row1 <- plot_grid(task_plt,
@@ -167,15 +191,19 @@ e2maineff[,notbaseline:=level!="Baseline"]
 e2weights_plt <- ggplot(e2maineff, aes(x=level,y=mean,color=condition)) +
   geom_pointrange(aes(ymin=lb,ymax=ub),position = position_dodge(width=0.3)) + geom_hline(data=data.table(y=c(0,NA),notbaseline=c(T,F)),aes(yintercept=y)) +
   xlab(NULL) + scale_color_brewer(NULL,palette = "Dark2") + scale_y_continuous("Case strength (points)",breaks=seq(-10,70,10)) + 
-  facet_wrap(vars(notbaseline),ncol=1,scales="free_y",strip.position = NULL,drop=F) +  
+  facet_wrap(vars(notbaseline),ncol=1,scales="free_y",drop=F) +  
   theme(axis.text.x=element_text(angle=30,hjust=1),strip.text.x = element_blank(),panel.spacing = unit(1,"lines")) 
-# e2maineff[,notbaseline:=NULL]
+  # e2maineff[,notbaseline:=NULL]
 
 # ggsave(paste0(figpath,"condweights.pdf"), width = 8, height = 4, condweights)
 
 # ggsave(paste0(figpath,"condweights_baseline.pdf"), width = 8, height = 4,
 # condweights %+% e2maineff[level=="baseline"] + scale_x_discrete(drop=F) + ylim(layer_scales(condweights)$y$get_limits()))
 
+e2maineff_samps <- (gather_draws(rfit_cond_alt,mu_alpha_resp[cond],mu_beta_resp[cond,evidence]) |> 
+                      setDT() |> parse_evidence())[,cond:=set_factor_context(cond)] |> cull_defenseless()
+e2maineff <- e2maineff_samps[,mean(.value),by=.(cond,valence,.draw)][,post_summary_dt(V1),by=.(cond,valence)]
+e2maineff[,notbaseline:=valence!="Baseline"]
 
 #### Case strength distributions ####
 foo <- merge(ldat_cond,makebalancedat(ldat_cond),by=c("uid","scenario"))
@@ -228,7 +256,7 @@ fig3 <- plot_grid(ggdraw() + draw_image(magick::image_read_svg("lineup_alt.svg")
           plot_grid(prepostplt + theme(legend.position = "right"),labels = c("","d"), nrow = 2,scale = c(1,.9),label_size = lsz)
 ggsave("figure3.pdf",fig3,cairo_pdf,width = 9,height = 6)
 
-##### Binary choice exp 2 a&b ####
+##### Binary choice exp 2a&b, 3 ####
 postsumm <- rbind(aggsumm_cond(bfit_rate[[ratecond[1]]],evcond,"condition","rating","Exp. 2b: Without Rating"),
                   aggsumm_cond(bfit_rate[[ratecond[2]]],evcond,"condition","rating","Exp. 2b: With Rating"),
                   aggsumm_cond(bfit_cond,evcond,"condition","rating","Exp. 2a")

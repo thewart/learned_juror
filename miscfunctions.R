@@ -31,7 +31,6 @@ printci2 <- function(r,d=2,n=F,wrap=F) {
   return(out)
 }
 
-
 poisbinom <- function(lambda, theta, n = 1e6) {
   N <- rpois(n,lambda)
   out <- rnk(N,theta,n)
@@ -91,7 +90,6 @@ mvwnft <- function(data,ws,cond=NA) {
   return(mvplt)
 }
 
-
 post_summary_dt <- function(samps,name = colnames(samps), ci=.95) {
   if (length(dim(samps)) %in% c(0,1))
     samps <- matrix(samps,ncol=1)
@@ -99,11 +97,10 @@ post_summary_dt <- function(samps,name = colnames(samps), ci=.95) {
                     ub=apply(samps,2,quantile,prob=0.5+ci/2),level=name))
 }
 
-
 aggsumm_cond <- function(fit,ordcond,condlabel="condition",label=NULL,cont=NULL,resp_scale=F) {
   dt <- data.table()
   for (cond in ordcond) {
-    dti <- aggsumm(fit[[cond]],resp_scale=resp_scale) %>% post_summary_dt()
+    dti <- aggsumm1(fit[[cond]],resp_scale=resp_scale) %>% post_summary_dt()
     dti[[condlabel]] <- cond
     dt <- rbind(dt,dti)
   }
@@ -111,7 +108,7 @@ aggsumm_cond <- function(fit,ordcond,condlabel="condition",label=NULL,cont=NULL,
   return(dt)
 }
 
-aggsumm <- function(fit,incind=c(3,6,9,11),excind=c(1,4,7,10),ambind=c(2,5,8),resp_scale=F) {
+aggsumm1 <- function(fit,incind=c(3,6,9,11),excind=c(1,4,7,10),ambind=c(2,5,8),resp_scale=F) {
   if (resp_scale) {
     beta <- extract(fit,pars="mu_beta_resp")[[1]]
     alpha <- extract(fit,pars="mu_alpha_resp")[[1]]
@@ -122,6 +119,26 @@ aggsumm <- function(fit,incind=c(3,6,9,11),excind=c(1,4,7,10),ambind=c(2,5,8),re
   
   samps <- data.table(baseline=alpha,exculpatory=rowMeans(beta[,excind]),ambiguous=rowMeans(beta[,ambind]),
                  inculpatory=rowMeans(beta[,incind]),combined=rowMeans(beta))
+  return(samps)
+}
+
+aggsumm2 <- function(fit,incind=c(3,6,9,11),excind=c(1,4,7,10),ambind=c(2,5,8),resp_scale=F) {
+  if (resp_scale) {
+    #   beta <- extract(fit,pars="mu_beta_resp")[[1]]
+    alpha <- extract(fit,pars="mu_alpha_resp")[[1]]
+  } else {
+    alpha <- extract(fit,pars="mu_alpha")[[1]]
+  }
+  beta <- extract(fit,pars="mu_beta")[[1]]
+  
+  samps <- data.table(exculpatory=rowMeans(beta[,excind]),ambiguous=rowMeans(beta[,ambind]),inculpatory=rowMeans(beta[,incind]),combined=rowMeans(beta))
+  
+  if (resp_scale) {
+    scale <- extract(fit,pars=c("mu_scale","sigma_scale"))
+    samps <- lapply(samps,pointscale,scale$mu_scale,scale$sigma_scale,center=T) |> as.data.table()
+  }
+  
+  samps <- cbind(baseline=alpha,samps)
   return(samps)
 }
 
@@ -151,14 +168,6 @@ label_dt <- function(dt) {
   dt$type <- rep(evtypes,times=c(1,3,3,3,2)) %>% factor(levels=evtypes)
   dt$level <- c(evlevels[1],rep(evlevels[-1],4)[-11]) %>% factor(levels=evlevels)
   return(dt)
-}
-
-transfunc_init <- function(priorscale=0.25,P=11) {
-  return(list(mu_alpha=rnorm(1),mu_beta=rnorm(P),
-              sigma_alpha_scen=abs(rnorm(1,0,priorscale)),sigma_alpha_subj=abs(rnorm(1,0,priorscale)),
-              sigma_beta_scen=abs(rnorm(P,0,priorscale)),sigma_beta_subj=abs(rnorm(P,0,priorscale)),
-              sigma_mu_lambda=abs(rnorm(1,0,0.05)),sigma_lambda_subj=abs(rnorm(1,0,0.05)),
-              mu_scale=rnorm(1,0,0.5),sigma_scale=abs(rnorm(1,0,.25))))
 }
 
 # postpredsamp <- function(X, Subj, Scen, mu_alpha, mu_beta, alpha_subj, alpha_scen, beta_subj, beta_scen) {
@@ -262,20 +271,54 @@ get_beta_scen_resp <- function(fit) {
   scale <- extract(fit,"mu_scale")[[1]]
   beta_scen <- extract(fit,"beta_scen")[[1]]
   beta <- extract(fit,"mu_beta")[[1]]
+  nsamp <- length(scale)
   for (i in 1:nrow(beta)) beta_scen[i,,] <- sweep(beta_scen[i,,],2,beta[i,],FUN = "+")
   for (i in 1:dim(beta_scen)[2])
     for (j in 1:dim(beta_scen)[3])
-      beta_scen[,i,j] <- Yhatify(beta_scen[,i,j],exp(scale + scalescale^2/2),1:2000,0,100,1)
+      beta_scen[,i,j] <- Yhatify(beta_scen[,i,j],exp(scale + scalescale^2/2),1:nsamp,0,100,1)
   return(beta_scen)
 }
 
 get_alpha_scen_resp <- function(fit) {
   scalescale <- extract(fit,"sigma_scale")[[1]]
   scale <- extract(fit,"mu_scale")[[1]]
+  nsamp <- length(scale)
   alpha_scen <- sweep(extract(fit,"alpha_scen")[[1]],1,extract(fit,"mu_alpha")[[1]],FUN = "+")
-  for (i in 1:ncol(alpha_scen)) alpha_scen[,i] <- Yhatify(alpha_scen[,i],exp(scale + scalescale^2/2),1:2000,0,100,1)
+  for (i in 1:ncol(alpha_scen)) alpha_scen[,i] <- Yhatify(alpha_scen[,i],exp(scale + scalescale^2/2),1:nsamp,0,100,1)
   return(alpha_scen)
 }
+
+get_alpha_subj_resp <- function(fit) {
+  scale <- extract(fit,"scale_subj")[[1]]
+  alpha_subj <- sweep(extract(fit,"alpha_subj")[[1]],1,extract(fit,"mu_alpha")[[1]],FUN = "+")
+  nsamp <- nrow(alpha_subj)
+  for (i in 1:ncol(alpha_subj)) alpha_subj[,i] <- Yhatify(alpha_subj[,i],scale[,i],1:nsamp,0,100,1)
+  return(alpha_subj)
+}
+
+get_beta_subj_resp <- function(fit) {
+  samps <- extract(fit,c("mu_beta","beta_subj"))
+  scale <- extract(fit,"scale_subj")[[1]]
+  beta_subj <- sweep(samps$beta_subj,c(1,3),samps$mu_beta,"+")
+  nsamp <- nrow(beta_subj)
+  for (i in 1:dim(beta_subj)[2])
+    for (j in 1:dim(beta_subj)[3])
+      beta_subj[,i,j] <- Yhatify(beta_subj[,i,j],scale[,i],1:nsamp,0,100,1)
+  return(beta_subj-50)
+}
+
+get_beta_subj_bias <- function(fit) {
+  samps <- extract(fit,c("mu_beta","beta_subj"))
+  beta_subj <- sweep(samps$beta_subj,c(1,3),samps$mu_beta,"+")
+  return(apply(beta_subj,c(1,2),sum)/apply(abs(beta_subj),c(1,2),sum))
+}
+
+get_beta_subj_tot <- function(fit) {
+  samps <- extract(fit,c("mu_beta","beta_subj"))
+  beta_subj <- sweep(samps$beta_subj,c(1,3),samps$mu_beta,"+")
+  return(apply(abs(beta_subj),c(1,2),sum))
+}
+
 
 intvsmain <- function(standat,fitint) {
   intconts <- str_split_fixed(colnames(standat$Z),":",n=2) %>% apply(1,function(y) colnames(standat$X) %in% y)
@@ -302,3 +345,28 @@ calc_t_ind <- function(I,B,S) {
 
 calc_con <- function(X,B) (t(B) %*% X) |> as.vector()
 calc_con_se <- function(X,S) (t(X) %*% S %*% X) |> diag() |> sqrt()
+
+pointscale <- function(x,mu_scale,sigma_scale,center=F) {
+  y <- pnorm(x/exp(mu_scale+sigma_scale^2/2))*100
+  if (center) y <- y - 50
+  return(y)
+}
+
+factor_inorder <- function(x) return(factor(x,levels=unique(x)))
+
+parse_evidence <- function(samps,baseline=T) {
+  samps[str_detect(evidence,"physical"),type:="Physical"]
+  samps[str_detect(evidence,"document"),type:="Document"]
+  samps[str_detect(evidence,"witness"),type:="Witness"]
+  samps[str_detect(evidence,"character"),type:="Character"]
+  samps[str_detect(evidence,"clear_ex"),valence:="Exculpatory"]
+  samps[str_detect(evidence,"ambiguous"),valence:="Ambiguous"]
+  samps[str_detect(evidence,"clear_in"),valence:="Inculpatory"]
+  if (baseline) samps[is.na(evidence),c("type","valence"):="Baseline"]
+  
+  samps[,type:=factor(type,levels=c("Baseline","Physical","Document","Witness","Character"))]
+  samps[,valence:=factor(valence,levels=c("Baseline","Exculpatory","Ambiguous","Inculpatory"))]
+  return(samps)
+}
+
+set_factor_context <- function(x) return(factor(str_to_title(x),levels = c("Balanced","Credible","Defenseless")))

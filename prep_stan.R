@@ -46,7 +46,7 @@ makelegaldat <- function(scendat,subjdat,clickdat,fthresh=NULL) {
   return(dat)
 }
 
-makestandat <- function(dat,interact=F,binresp=F) { 
+makestandat <- function(dat,interact=F,binresp=F,cond=NULL,levelref=T) { 
   Nsubj <- length(unique(dat$uid))
   Nscen <- length(unique(dat$scenario))
   
@@ -56,14 +56,14 @@ makestandat <- function(dat,interact=F,binresp=F) {
   
   # get censoring data frame
   X <- model.matrix(~ 1 + physical + document + witness + character, data=dat)[,-1]
-  S <- dat[,factor(uid) %>% as.numeric]
+  S <- factor_inorder(dat$uid) |> as.numeric()
   C <- dat$scenario
   
   # useful dimensions
   N <- dim(X)[1]
   P <- dim(X)[2]
   
-  standat <- list( Nsubj=Nsubj, Nscen=Nscen, N=N, P=P, Scen=C, Subj=S, X=X)
+  standat <- list(Nsubj=Nsubj, Nscen=Nscen, N=N, P=P, Scen=C, Subj=S, X=X)
   
   if (interact) {
     Z <- model.matrix(~ 1 + physical + document + witness + character + 
@@ -72,13 +72,22 @@ makestandat <- function(dat,interact=F,binresp=F) {
     Z <- Z[,which(apply(Z,2,uniqueN)==2)]
     standat <- c(standat, Z = list(Z), P2 = ncol(Z))
   }
+  
+  if (!is.null(cond)) {
+    standat$Cond <- factor_inorder(dat[[cond]]) |> as.numeric()
+    standat$Ncond <- length(unique(standat$Cond))
+  }
+  
   if (binresp) {
     standat <- c(standat,Y = list(dat[,as.numeric(bardguilt)]))
   } else {
     Y <- dat$rating
-    # cens <- (Y == U) - (Y == L)
-    # standat <- c(standat, L=L, U=U, Y=list(Y), cens=list(cens), D=1)
     standat <- c(standat, L=L, U=U, Y=list(Y), D=1)
+  }
+  
+  if (levelref) {
+    standat$ref <- list(uid=factor_inorder(unique(dat$uid)),evidence=factor_inorder(colnames(X)))
+    if (!is.null(cond)) standat$ref$cond <- factor_inorder(unique(dat[[cond]]))
   }
   
   return(standat)
@@ -96,4 +105,21 @@ makebalancedat_nochar <- function(dat) {
                 n_inculp=str_detect(sapply(.(physical,document,witness),as.character),"in") %>% sum(),
                 n_ambig=str_detect(sapply(.(physical,document,witness),as.character),"amb") %>% sum()),
              by=.(uid,scenario)])
+}
+
+transfunc_init <- function(priorscale=0.25,P=11,C=1) {
+  init <- list(mu_alpha=rnorm(C),mu_beta=rnorm(P*C),
+              sigma_alpha_scen=abs(rnorm(1,0,priorscale)),sigma_alpha_subj=abs(rnorm(1,0,priorscale)),
+              sigma_beta_scen=abs(rnorm(P,0,priorscale)),sigma_beta_subj=abs(rnorm(P,0,priorscale)),
+              sigma_mu_lambda=abs(rnorm(1,0,0.05)),sigma_lambda_subj=abs(rnorm(1,0,0.05)),
+              mu_scale=rnorm(1,0,0.5),sigma_scale=abs(rnorm(1,0,.25)))
+  if (C>1) init$mu_beta <- matrix(init$mu_beta,C,P)
+  return(init)
+}
+
+transfunc_init_intervention <- function(priorscale=0.25,P=11,C=1) {
+  prior <- transfunc_init(priorscale,P,C=1)
+  prior$mu_lambda <- rnorm(2)
+  prior$sigma_lambda <- abs(rnorm(2,0,priorscale))
+  return(prior)
 }
