@@ -154,6 +154,7 @@ generated quantities {
   real mu_beta_ave_post_resp[Ncond];
   vector[P] mu_beta_pre_resp[Ncond];
   real mu_lambda_alpha_resp[Ncond];
+  real mu_lambda_beta_resp[Ncond];
   real rho_lambda = (L_lambda * L_lambda')[2,1];
 
   for (c in 1:Ncond) {
@@ -163,5 +164,6 @@ generated quantities {
     mu_beta_ave_post_resp[c] = (Phi((mean(mu_beta[c]) + mu_lambda[c][2])/exp(mu_scale + pow(sigma_scale,2)/2)) - 0.5)*(U-L) + L;
     for (p in 1:P) mu_beta_pre_resp[c][p] = (Phi(mu_beta[c][p]/exp(mu_scale + pow(sigma_scale,2)/2)) - 0.5)*(U-L) + L;
     mu_lambda_alpha_resp[c] = (Phi(mu_lambda[c][1]/exp(mu_scale + pow(sigma_scale,2)/2)) - 0.5)*(U-L) + L;
+    mu_lambda_beta_resp[c] = (Phi(mu_lambda[c][2]/exp(mu_scale + pow(sigma_scale,2)/2)) - 0.5)*(U-L) + L;
   }
 }
