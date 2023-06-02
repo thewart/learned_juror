@@ -1,5 +1,5 @@
 printci <- function(dat,lev,d=2,n=F,wrap=F) {
-  r <- dat[level==lev,1:3,with=F]
+  r <- dat[valence==lev,.(mean,lb,ub)]
   if (n) {
     r <- lapply(r,function(x) -1*x)
     CI <- paste0("CI=[", round(r$ub,d), ", ", round(r$lb,d),"]")
@@ -354,19 +354,56 @@ pointscale <- function(x,mu_scale,sigma_scale,center=F) {
 
 factor_inorder <- function(x) return(factor(x,levels=unique(x)))
 
-parse_evidence <- function(samps,baseline=T) {
-  samps[str_detect(evidence,"physical"),type:="Physical"]
-  samps[str_detect(evidence,"document"),type:="Document"]
-  samps[str_detect(evidence,"witness"),type:="Witness"]
-  samps[str_detect(evidence,"character"),type:="Character"]
-  samps[str_detect(evidence,"clear_ex"),valence:="Exculpatory"]
-  samps[str_detect(evidence,"ambiguous"),valence:="Ambiguous"]
-  samps[str_detect(evidence,"clear_in"),valence:="Inculpatory"]
-  if (baseline) samps[is.na(evidence),c("type","valence"):="Baseline"]
+parse_evidence <- function(X,baseline=T) {
+  X[str_detect(evidence,"physical"),type:="Physical"]
+  X[str_detect(evidence,"document"),type:="Document"]
+  X[str_detect(evidence,"witness"),type:="Witness"]
+  X[str_detect(evidence,"character"),type:="Character"]
+  X[str_detect(evidence,"clear_ex"),valence:="Exculpatory"]
+  X[str_detect(evidence,"ambiguous"),valence:="Ambiguous"]
+  X[str_detect(evidence,"clear_in"),valence:="Inculpatory"]
+  X[,c(".chain",".iteration","evidence",".variable"):=NULL]
+  if (baseline) X[is.na(type),c("type","valence"):="Baseline"]
   
-  samps[,type:=factor(type,levels=c("Baseline","Physical","Document","Witness","Character"))]
-  samps[,valence:=factor(valence,levels=c("Baseline","Exculpatory","Ambiguous","Inculpatory"))]
-  return(samps)
+  X[,type:=factor(type,levels=c("Baseline","Physical","Document","Witness","Character"))]
+  X[,valence:=factor(valence,levels=c("Baseline","Exculpatory","Ambiguous","Inculpatory"))]
+  return(X)
+}
+
+parse_capstone <- function(X) {
+  X[str_detect(.variable,"alpha"),type:="Baseline"]
+  X[str_detect(.variable,"beta"),type:="Ave. evidence"]
+  X[str_detect(.variable,"pre"),capped:=F]
+  X[str_detect(.variable,"post"),capped:=T]
+  
+  return(X)
+}
+
+weights_by_cond_plot <- function(X,bard=F) {
+  ytitle <- "Case strength (points)"
+  if (bard) ytitle <- "Guilty judgment (log odds)"
+  plt <- ggplot(X, aes(x=valence,y=mean,color=cond)) + geom_pointrange(aes(ymin=lb,ymax=ub),position = position_dodge(width=0.3)) + 
+    geom_hline(data=data.table(y=c(0,NA),notbaseline=c(T,F)),aes(yintercept=y)) +
+    xlab(NULL) + scale_color_brewer(NULL,palette = "Dark2") + scale_y_continuous(ytitle) + theme(axis.text.x=element_text(angle=30,hjust=1))
+}
+
+weights_within_valence <- function(X) return(X[,mean(.value),by=.(cond,valence,.draw)][,post_summary_dt(V1),by=.(cond,valence)])
+average_weights <- function(X,summary=T) {
+  out <- X[valence!="Baseline",.(.value=mean(.value),valence="Ave. evidence"),by=.(cond,.draw)]
+  if (summary) {
+    return(out[,post_summary_dt(.value),by=.(cond,valence)])
+  } else {
+    return(out)
+  }
 }
 
 set_factor_context <- function(x) return(factor(str_to_title(x),levels = c("Balanced","Credible","Defenseless")))
+cull_defenseless <- function(dt) return(dt[!(cond=="Defenseless" & valence %in% c("Exculpatory","Ambiguous","Ave. evidence"))])
+set_factor_rate <- function(DT) {
+  x <- DT$cond
+  context_cond <- str_split_i(x,":",1) |> set_factor_context()
+  DT[,cond:=context_cond]
+  context_rate <- str_split_i(x,":",2)
+  DT[,rating:=factor(str_to_title(context_rate),levels=c("Without","With"))]
+  return(DT)
+}

@@ -74,7 +74,10 @@ makestandat <- function(dat,interact=F,binresp=F,cond=NULL,levelref=T) {
   }
   
   if (!is.null(cond)) {
-    standat$Cond <- factor_inorder(dat[[cond]]) |> as.numeric()
+    c <- dat[[cond[1]]]
+    if (length(cond)>1) 
+      for (i in 2:length(cond)) c <- paste(c,dat[[cond[i]]],sep=":")
+    standat$Cond <- factor_inorder(c) |> as.numeric()
     standat$Ncond <- length(unique(standat$Cond))
   }
   
@@ -87,7 +90,7 @@ makestandat <- function(dat,interact=F,binresp=F,cond=NULL,levelref=T) {
   
   if (levelref) {
     standat$ref <- list(uid=factor_inorder(unique(dat$uid)),evidence=factor_inorder(colnames(X)))
-    if (!is.null(cond)) standat$ref$cond <- factor_inorder(unique(dat[[cond]]))
+    if (!is.null(cond)) standat$ref$cond <- factor_inorder(unique(c))
   }
   
   return(standat)
