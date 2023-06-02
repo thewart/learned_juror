@@ -11,7 +11,7 @@ load("../analysis/exp2_fits.Rdata")
 load("../analysis/exp3_fits.Rdata")
 
 colorscheme <- c("Baseline"="black","Inculpatory"="red","Exculpatory"="blue", "Ambiguous"="magenta")
-theme_set(theme_minimal_grid(font_size = 10))
+theme_set(theme_minimal_grid(font_size = 10, font_family = "arial"))
 lsz <- 11
 figpath <- "../analysis/presentation_figs/"
 

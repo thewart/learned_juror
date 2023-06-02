@@ -49,12 +49,6 @@ rfit <- sampling(model,standat,chains=4,init=transfunc_init,iter=1000,warmup=500
 rfitint <- sampling(intmodel,standat,chains=4,init=transfunc_init,iter=1000,warmup=500,
                         pars=c(basepars,rpars,intpars))
 
-
-##### PPC -- Case strength rating distribution ####
-expose_stan_functions(rfit)
-ob <- c(standat,extract(rfit))
-yrep <- postpredsample(ob)
-
 ##### Interactions ####
 looout <- loo_compare(loo(rfit),loo(rfitint))
 expose_stan_functions(rfitint)
