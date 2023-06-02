@@ -2,6 +2,7 @@ library(rstanarm)
 library(lme4)
 library(cowplot)
 library(tidybayes)
+extrafont::loadfonts()
 source("miscfunctions.R")
 source("prep_stan.R")
 evcond <- c("balanced","credible","defenseless")
@@ -13,7 +14,7 @@ load("../analysis/exp2b_fits.Rdata")
 load("../analysis/exp3_fits.Rdata")
 
 colorscheme <- c("Baseline"="black","Inculpatory"="red","Exculpatory"="blue", "Ambiguous"="magenta")
-theme_set(theme_minimal_grid(font_size = 12))
+theme_set(theme_minimal_grid(font_size = 12, font_family = extrafont::choose_font("Arial")))
 lsz <- 14
 figpath <- "../figures/"
 
@@ -62,9 +63,9 @@ evconfig_plt <- ggplot(pphat,aes(y=Yhat,x=rating)) + geom_point() + geom_abline(
   labs(x = "Predicted rating", y="Rating", fill= "Evidence balance")
 
 
-ggsave(paste0(figpath,"evconfig_bw.pdf"), width = 6, height = 4,
-       ggplot(pphat,aes(y=rating,x=Yhat)) + geom_point() + geom_abline() + 
-         labs(x = "Predicted rating", y="Rating") + geom_smooth(method="lm",color="black",linetype=2,se=F))
+# ggsave(paste0(figpath,"evconfig_bw.pdf"), width = 6, height = 4,
+#        ggplot(pphat,aes(y=rating,x=Yhat)) + geom_point() + geom_abline() + 
+#          labs(x = "Predicted rating", y="Rating") + geom_smooth(method="lm",color="black",linetype=2,se=F))
 
 #### Evidence weights ####
 effdt <- combine_ab(rfit,"mu_alpha_resp","mu_beta_resp") %>% post_summary_dt() %>% label_dt()
@@ -107,6 +108,7 @@ ggplot(alphabeta_dat,aes(y=beta_hat,x=alpha_hat)) + geom_point() + geom_errorbar
 
 #### MEGAFIGURE ASSEMBLE ####
 task_plt <- ggdraw() + draw_image(paste0(figpath,"task.png"))
+statement_plt <- ggdraw() + draw_image(paste0(figpath,"missionstatement_abridged.png"))
 # row1 <- plot_grid(task_plt,
 #                   guiltvstrength_plt + theme(plot.margin = margin(1,1,1,1,unit = "lines")),
 #                   evconfig_plt + theme(plot.margin = margin(1,1,1,1,unit="lines")),
@@ -114,15 +116,26 @@ task_plt <- ggdraw() + draw_image(paste0(figpath,"task.png"))
 # row2 <- plot_grid(weights_plt + theme(legend.position = "top",plot.margin = margin(r=1,unit = "lines")),
 #                   diff_plt + theme(legend.position = "top",plot.margin = margin(l=1,unit = "lines")),nrow = 1,labels = c("d","e"),label_size = lsz)
 
-row1 <- plot_grid(task_plt + theme(plot.margin = margin(1,2,1,2,unit = "lines")),
-                  guiltvstrength_plt + theme(plot.margin = margin(1,2,1,2,unit = "lines")),
-                  nrow=1,labels = "auto",label_size = lsz, rel_widths = c(1,1))
-row2 <- plot_grid(
-  evconfig_plt + theme(legend.position = "top",plot.margin = margin(l=1,r=1,unit = "lines")),
-  weights_plt + theme(legend.position = "top",plot.margin = margin(r=1,l=1,unit = "lines")),
-  nrow = 1,rel_widths = c(.6,1),labels = c("c","d"),label_size = lsz)
+col1 <- plot_grid(statement_plt + theme(plot.margin = margin(1,0,1,0,unit = "lines")),
+          task_plt + theme(plot.margin = margin(1,1,1,1,unit = "lines")),
+          rel_heights=c(1,.75),ncol=1,labels="auto",label_size = lsz)
 
-fig1 <-plot_grid(row1,row2,ncol = 1)
+row1 <- plot_grid(guiltvstrength_plt + theme(plot.margin = margin(1,1,1,1,unit = "lines")),
+                   evconfig_plt + theme(legend.position = "top",plot.margin = margin(1,1,1,1,unit = "lines")),
+                  nrow=1,label_size = lsz, rel_widths = c(1,1))
+col2 <- plot_grid(row1,weights_plt + theme(plot.margin = margin(r=1,l=1,unit = "lines")), labels=c("c","d"),ncol=1)
+
+fig1 <- plot_grid(col1,col2,rel_widths = c(.5,1))
+
+row1 <- plot_grid(statement_plt + theme(plot.margin = margin(0,1,0,1,unit = "lines")), 
+                  task_plt + theme(plot.margin = margin(1,1,1,1,unit = "lines")),
+                  guiltvstrength_plt + theme(plot.margin = margin(1,1,1,1,unit = "lines")),
+                  nrow=1, labels = "auto")
+row2 <- plot_grid(evconfig_plt + theme(legend.position = "top",plot.margin = margin(1,1,1,1,unit = "lines")),
+                  weights_plt + theme(plot.margin = margin(r=1,l=1,unit = "lines")),
+                  rel_widths = c(.5,1), nrow = 1, labels = c("d","e"))
+fig1 <- plot_grid(row1,row2,nrow = 2)
+
 
 ggsave(paste0(figpath,"figure1.pdf"),fig1,cairo_pdf,width = 9,height = 6)
 
@@ -244,11 +257,11 @@ prepostplt <- ggplot(eldat[(level!="Combined")],aes(y=value,color=condition,x=pe
   geom_point(position = position_dodge(width=0.5),size = 2) + geom_line(position = position_dodge(width=0.5)) +
   geom_hline(data=data.table(y=c(0,NA),notbl=c(T,F)),aes(yintercept=y)) + 
   scale_color_manual(NULL,breaks=c("Balanced","Credible","Defenseless"),values = RColorBrewer::brewer.pal(3,"Dark2")) + 
-  scale_shape_manual(NULL,labels=c("Learning Start","Learing End"), values=c(Start="square",End="triangle")) +
+  scale_shape_manual(NULL,labels=c("Learning Start","Learning End"), values=c(Start="square",End="triangle")) +
   scale_y_continuous("Case strength (points)",breaks=seq(-10,70,10)) + facet_grid(notbl ~ level,switch = "x",scales = "free_y", space = "free") + 
   scale_x_discrete(NULL,label=NULL) + theme(strip.text.y = element_blank(),panel.spacing.x = unit(-1,"lines"), panel.spacing.y = unit(1,"lines"))
 
-row1 <- plot_grid(ggdraw() + draw_image(paste0(figpath,"boxtheory.png")) + theme(plot.margin = margin(t=1,b=1,unit="lines")),
+row1 <- plot_grid(ggdraw() + draw_image(paste0(figpath,"learner_juror.png")) + theme(plot.margin = margin(t=1,b=1,unit="lines")),
                   ggdraw() + draw_image(paste0(figpath,"expectations.png")) + theme(plot.margin = margin(t=1,b=1,unit="lines")),
                   rel_widths = c(.6,1), labels = "auto", label_size = lsz, nrow=1)
 row2 <- plot_grid(
@@ -271,7 +284,7 @@ buh$rating <- "Exp2"
 
 lst <- list("Without" = "Exp. 2b: Without Rating",
             "With" = "Exp. 2b: With Rating",
-            "Exp2" = "Exp. 2a: With Rating")
+            "Exp2" = "Exp. 2a")
 explabeller <- function(variable,value) return(lst[value])
 bard_plt <- weights_by_cond_plot(rbind(buh,juh),bard = T) + facet_wrap(vars(rating),ncol=1,labeller = explabeller)
 
@@ -367,6 +380,7 @@ cap_weights_bard_plt <- weights_by_cond_plot(cap_weights_bard_summary,T)
 cap_intervene_samps <- (gather_draws(rfit_cap,mu_alpha_pre_resp[cond],mu_alpha_post_resp[cond],mu_beta_ave_pre_resp[cond],mu_beta_ave_post_resp[cond]) |> 
                        setDT())[,cond:=set_factor_context(cond)]
 cap_intervene_summary <- cap_intervene_samps[,post_summary_dt(.value),by=.(cond,.variable)] |> parse_capstone()
+cap_intervene_summary[,type:=factor(type,levels = unique(type))]
 capcrossovers_plt <- ggplot(cap_intervene_summary,aes(y=mean,ymin=lb,ymax=ub,x=capped,color=cond,group=cond)) + geom_pointrange(position = position_dodge(width=.5)) + 
   facet_wrap(vars(type),scales="free",strip.position = "bottom") + geom_line(position = position_dodge(width=.5)) + scale_color_brewer(NULL,palette = "Dark2") +
   scale_x_discrete(NULL,labels=c("Pre-inst.","Post-inst.")) + ylab("Case strength (points)") + theme(strip.placement = "outside")
@@ -392,4 +406,4 @@ fig4 <- plot_grid(ggdraw() + draw_image(paste0(figpath,"task3.png")) + theme(plo
           capcrossovers_plt + theme(legend.position = "top"),
           nrow=1, rel_widths = c(.75,1), labels = "auto", label_size = lsz)
 
-ggsave(paste0(figpath,"figure4.pdf"),fig4,cairo_pdf,width = 9,height = 6)
+ggsave(paste0(figpath,"figure4.pdf"),fig4,cairo_pdf,width = 9,height = 3)
