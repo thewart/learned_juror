@@ -155,7 +155,7 @@ alpha_scen_resp_diff <- get_alpha_scen_resp(rfit_cond$credible) - get_alpha_scen
 
 ##### learning model ####
 rldat <- makestanrldat(ldat_cond)
-rlmodel <- stan_model("/home/seth/code/legalmodels/refcase_transfunc1_flat.stan")
+rlmodel <- stan_model("/models/refcase_transfunc1_flat.stan")
 rlfit <- optimizing(rlmodel,rldat,as_vector=F)
 
 #### Experiment 2b ####

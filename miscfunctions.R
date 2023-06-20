@@ -153,7 +153,7 @@ makestanrldat <- function(ldat, rescale=F) {
   standat <- makestandat(ldat)
   standat$Trial <- ldat$question + 1
   standat$Cond <- ldat[,ordered(cond_evidence) %>% as.numeric()]
-  standat$NX <- rowSums(standat$X)
+  standat$m <- rowSums(standat$X)
   if (rescale) standat$Y <- scale(standat$Y) %>% as.vector()
   return(standat)
 }
