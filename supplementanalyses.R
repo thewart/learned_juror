@@ -48,3 +48,60 @@ intdt <- intvsmainplt(standat,rfitint)
 ggplot(intdt,aes(x=compsum,y=mean)) + geom_point() +
   geom_errorbar(aes(ymin=lb,ymax=ub),alpha=0.25,width=0) + geom_errorbarh(aes(xmin=clb,xmax=cub),alpha=0.25,height=0) +
   geom_hline(yintercept = 0) + geom_vline(xintercept = 0) + ylab("Interaction effect (a.u.)") + xlab("Sum of main effects (a.u.)")
+
+##### really seth
+standat <- makestandat(ldat)
+powmodel_fixed <- stan_model("models/transfunc1_pow_fixed.stan")
+pfit <- sampling(powmodel_fixed,standat,chains=4,iter=500,warmup=250,pars=c("mu_alpha","mu_beta","mu_scale","sigma_scale","mu_gamma","Yhat","log_lik"),
+                 control=list(max_treedepth=14))
+
+
+# 
+math_xlab <- "Amount of observed evidence"
+math_ylab <- "Amount of inferred evidence"
+tm <- 4
+q <- .5
+ff <- c(1/3,2/3,3/2,3)
+cmp_dat <- data.table()
+for (f in ff) {
+  juh <- rcmpbinom2(tm,tm*f,q,1e6)[,.(khat=mean(n-m),.N),by=m]
+  juh$ff <- f
+  cmp_dat <- rbind(cmp_dat,juh)
+}
+cmp_dat <- cmp_dat[m < cmp_dat[N<500,min(m)],-"N",with=F]
+cmp_dat <- rbind(cmp_dat,data.table(m=0:max(cmp_dat$m),khat=tm*(1-q),ff=1))
+cmp_dat$dist <- "Conway-Maxwell Poisson"
+cmp_plt <- ggplot(cmp_dat,aes(y=khat,x=m,color=as.ordered(ff))) + geom_point() + geom_line() + coord_cartesian(c(0,NA),c(0,NA)) + ylab(math_ylab) + xlab(math_xlab) +
+  scale_color_ordinal(NULL,guide=guide_legend(ncol = 2),labels=c("Strong under-dispersion","Weak under-dispersion","Poisson disperson","Weak over-disperson","Strong over-dispersion")) + ggtitle("CMP evidence collection") +
+  theme(legend.position = "top", legend.justification = "right")
+
+
+#
+plotpq <- function(p,q,nu=6) {
+  theta <- (p*(1-q))/(1-p*q)
+  return(data.table(khat=(nu-0:nu)*theta,m=0:nu,theta=paste0("p=",p,",q=",q)))
+}
+binom_dat <- rbind(plotpq(1,0),plotpq(.5,.5),plotpq(0,1)) |> cbind(dist="Binomial")
+binom_plt <-  ggplot(binom_dat,aes(y=khat,x=m,color=as.ordered(theta) |> forcats::fct_rev())) + geom_line() + facet_wrap(vars(dist)) +
+  scale_color_discrete(NULL,labels=c("p=1, q<1","p=q=0.5", "p<1, q=1")) + scale_x_continuous(math_xlab, labels=c("0",NA,NA,expression(nu))) + 
+  scale_y_continuous(math_ylab, labels=c("0",NA,NA,expression(nu)))
+
+
+nbkhat <- function(mu,ff,q) {
+  v = mu*ff
+  nu = mu^2/(v-mu)
+  theta = (1-q)*mu/(nu+q*mu)
+  return(data.table(m=0:6,khat=(nu+0:6)*theta,ff=ff))
+}
+nbdat <- rbind(nbkhat(4,3,.5),
+      nbkhat(4,3/2,.5),
+      data.table(m=0:6,khat=rep(2,7),ff=1)) |> 
+  cbind(dist="Negative binomial")
+
+unbound_dat <- rbind(nbdat,cmp_dat)
+unbound_dat[,dist:=factor(dist,levels=unique(dist))]
+unbound_plt <- ggplot(unbound_dat[m<7],aes(y=khat,x=m,color=as.ordered(ff))) + geom_point() + geom_line() + facet_wrap(vars(dist),ncol=1) + 
+  scale_color_ordinal(NULL,labels=c("Strong under-dispersion","Weak under-dispersion","Poisson disperson","Weak over-disperson","Strong over-dispersion")) +
+  coord_cartesian(c(0,NA),c(0,NA)) + ylab(math_ylab) + xlab(math_xlab)
+
+plot_grid(binom_plt,unbound_plt,ncol=1,rel_heights = c(0.5,1),align = "v",labels = "auto")

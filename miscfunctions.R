@@ -33,14 +33,14 @@ printci2 <- function(r,d=2,n=F,wrap=F) {
 
 poisbinom <- function(lambda, theta, n = 1e6) {
   N <- rpois(n,lambda)
-  out <- rnk(N,theta,n)
+  out <- rnm(N,theta,n)
   out$lambda <- lambda
   return(out)
 }
 
 unifbinom <- function(a, b, theta, n = 1e6) {
   N <- rcategorical(n,rep(1/(b-a),b-a+1)) + a - 1
-  out <- rnk(N,theta,n)
+  out <- rnm(N,theta,n)
   out$a <- a
   out$b <- b
   return(out)
@@ -49,9 +49,50 @@ unifbinom <- function(a, b, theta, n = 1e6) {
 normbinom <- function(mu, sigma, theta, n = 1e6) {
   N <- rnorm(n,mu,sigma) %>% round()
   N[N<0] <- 0
-  out <- rnk(N,theta,n)
+  out <- rnm(N,theta,n)
   out$mu <- mu
   out$sigma <- sigma
+  return(out)
+}
+
+rnbinombinom <- function(nu,p,q,nsim = 1e6) {
+  n <- rnbinom(nsim,nu,1-p)
+  out <- rnm(n,q,nsim)
+  out$nu <- nu
+  out$p <- p
+  return(out)
+}
+
+rcmpbinom <- function(lambda,nu,q,nsim = 1e6) {
+  n <- rcmp(nsim,lambda,nu)
+  out <- rnm(n,q,nsim)
+  out$nu <- nu
+  out$lambda <- lambda
+  return(out)
+}
+
+CMPare <- function(theta,target_mean,target_var) 
+  (target_mean - ecmp(theta[1],theta[2]))^2 + (target_var - vcmp(theta[1],theta[2]))^2
+
+rcmpbinom2 <- function(mean,var,q,nsim = 1e6) {
+  theta <- optim(c(5,1),CMPare,target_mean=mean,target_var=var)$par
+  return(rcmpbinom(theta[1],theta[2],q,nsim))
+}
+
+dnbinombinom_analytic <- function(x,nu,m,p,q) {
+  pm <- (1-q)*p
+  return(dnbinom(x,nu+m,1-pm))
+}
+
+enbinombinom <- function(nu,m,p,q) {
+  pm <- (1-q)*p
+  return((nu+m)*pm/(1-pm) + m)
+}
+
+rlogbinom <- function(p,q,nsim=1e6) {
+  n <- rlogarithmic(nsim,p)
+  out <- rnm(n,q,nsim)
+  out$p <- p
   return(out)
 }
 
@@ -63,10 +104,10 @@ idunno <- function(n,k,p) {
   factorial(n)/factorial(n-k) * p^n
 }
 
-rnk <- function(N, theta, n=1e6) {
-  K <- rbinom(n,N,theta)
-  out <- data.table(N=N,K=K,theta=theta)
-  setkey(out,K)
+rnm <- function(n, q, nsim=1e6) {
+  m <- rbinom(nsim,n,q)
+  out <- data.table(n=n,m=m,q=q)
+  setkey(out,m)
   return(out)
 }
 
