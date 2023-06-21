@@ -35,23 +35,25 @@ transformed data {
 }
 
 parameters {
-  real alpha;
+  // real alpha;
   vector[P] beta;
   real<lower=0> scale; //scale of internal transfer function
   real<lower=0,upper=1> tau;
-  real<lower=0> nu_0[Ncond];
-  real<lower=0> nu_1[Ncond];
-  real W0;
+  real<lower=0> nu_0; //nhat intercept
+  real<lower=0> nu_1; //nhat slope
+  real psi; //truncation effect
+  // real W0;
 }
 
 transformed parameters {
   real eta[N];
   real Wbar[N];
+  real W0 = mean(beta);
+  real alpha = 0;
   
   for (i in 1:N) {
-    real nhat;
     real delta;
-    // real W0 = 0;
+    real nhat;
     real j;
     
     if (Trial[i] == 1) {
@@ -61,8 +63,8 @@ transformed parameters {
       else delta = (X[i-1]*beta)./m[i-1] - Wbar[i-1];
       Wbar[i] = Wbar[i-1] + tau*delta;
     }
-    nhat = nu_0[Cond[i]] + nu_1[Cond[i]]*m[i]
-    eta[i] = alpha + X[i]*beta + (nhat-m[i])*Wbar[i];
+    nhat = nu_0 + nu_1*m[i];
+    eta[i] = alpha + X[i]*beta + (nhat-m[i])*(Wbar[i] + psi*(Cond[i]==3));
   }
   
 }
@@ -85,10 +87,10 @@ generated quantities {
   real combined[N];
   
   for (i in 1:N) {
-    baseline[i] = alpha + nu_0[Cond[i]]*Wbar[i];
-    exceff[i] = (beta[1] + beta[4] + beta[7] + beta[10])/4 + (nu_1[Cond[i]]-1)*Wbar[i];
-    ambeff[i] = (beta[2] + beta[5] + beta[8])/3 + (nu_1[Cond[i]]-1)*Wbar[i];
-    inceff[i] = (beta[3] + beta[6] + beta[9] + beta[11])/4 + (nu_1[Cond[i]]-1)*Wbar[i];
-    combined[i] = mean(beta) + (nu_1[Cond[i]]-1)*Wbar[i];
+    baseline[i] = alpha + nu_0*(Wbar[i] + psi*(Cond[i]==3));
+    exceff[i] = (beta[1] + beta[4] + beta[7] + beta[10])/4 + (nu_1-1)*(Wbar[i] + psi*(Cond[i]==3));
+    ambeff[i] = (beta[2] + beta[5] + beta[8])/3 + (nu_1-1)*(Wbar[i] + psi*(Cond[i]==3));
+    inceff[i] = (beta[3] + beta[6] + beta[9] + beta[11])/4 + (nu_1-1)*(Wbar[i] + psi*(Cond[i]==3));
+    combined[i] = mean(beta) + (nu_1-1)*(Wbar[i] + psi*(Cond[i]==3));
   }
 }
