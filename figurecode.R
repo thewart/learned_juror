@@ -8,15 +8,16 @@ source("prep_stan.R")
 evcond <- c("balanced","credible","defenseless")
 ratecond <- c("without","with")
 
+colorscheme <- c("Baseline"="black","Inculpatory"="#ba4040ff","Exculpatory"="#406bbaff", "Ambiguous"="#765884ff")
+theme_set(theme_minimal_grid(font_size = 12, font_family = extrafont::choose_font("Arial")))
+lsz <- 14
+figpath <- "../figures/"
+
 load("../analysis/exp1_fitsplus.Rdata")
 load("../analysis/exp2_fits.Rdata")
 load("../analysis/exp2b_fits.Rdata")
 load("../analysis/exp3_fits.Rdata")
 
-colorscheme <- c("Baseline"="black","Inculpatory"="red","Exculpatory"="blue", "Ambiguous"="magenta")
-theme_set(theme_minimal_grid(font_size = 12, font_family = extrafont::choose_font("Arial")))
-lsz <- 14
-figpath <- "../figures/"
 
 #### Marginal impact of evidence ####
 diff_plt <- ggplot(marginaldiff,aes(y=mean,x=evbal,ymin=lb,ymax=ub,color=type,shape=source,linetype=source)) + 
@@ -142,6 +143,16 @@ ggsave(paste0(figpath,"figure1.pdf"),fig1,cairo_pdf,width = 9,height = 6)
 ##### Experiment 2 ####
 
 #### Direct comparison ####
+
+bdat_cond <- merge(ldat_cond,makebalancedat(ldat_cond),by=c("uid","scenario"))
+bdat_cond[,nev:=n_exculp + n_inculp + n_ambig]
+bdat_cond[,evconf:=paste0(physical,document,witness,character)]
+head2head <- bdat_cond[,mean(rating),by=.(epoch=cut_interval(question,3),cond_evidence,evconf,nev)] |> dcast(epoch+evconf+nev ~ cond_evidence)
+levels(head2head$epoch) <-  c("Early pre-instruction","Late pre-instruction","Post-instruction")
+ggplot(head2head,aes(y=credible-balanced,x=nev)) + geom_point() + facet_wrap(vars(epoch),labeller = ) + geom_smooth(method="lm") + 
+  xlab("Pieces of observed evidence") + ylab("Credible - balanced ratings (points)")
+
+
 foo <- ldat_cond[,.(rating,scenario,cond_evidence,uid),.(paste0(physical,document,witness,character))]
 juh <- foo[paste0 %in% foo[cond_evidence=="credible",unique(paste0)], mean(rating),by=.(paste0,cond_evidence)]
 juh <- rbind(dcast(juh[cond_evidence!="defenseless"],paste0 ~ cond_evidence)[,type:="Credible"],
@@ -233,20 +244,29 @@ fig2 <- plot_grid(ucplt + scale_colour_brewer(guide=NULL,palette = "Dark2") + th
 ggsave(paste0(figpath,"figure2.pdf"),fig2,cairo_pdf,width = 9,height = 6)
 
 #### Learning model ####
-pltdat <- cbind(ldat_cond[,.(question,condition=cond_evidence)],Baseline=rlfit$par$baseline,Inculpatory=rlfit$par$inceff,
-                Exculpatory=rlfit$par$exceff,Ambiguous=rlfit$par$ambeff,Combined=rlfit$par$combined,wbar=rlfit$par$Wbar)
+pltdat <- cbind(ldat_cond[,.(question,condition=cond_evidence)],
+                Baseline=rlfit$par$baseline,
+                Inculpatory=rlfit$par$inceff,
+                Exculpatory=rlfit$par$exceff,
+                Ambiguous=rlfit$par$ambeff,
+                Combined=rlfit$par$combined,
+                wbar=rlfit$par$Wbar,
+                truncbonus=rlfit$par$trunc_bonus)
 
-eldat <- pltdat[question %in% range(question),lapply(.SD,mean),by=.(question,condition)] |> 
+eldat <- pltdat[question %in% 0 | question %in% 30,lapply(.SD,mean),by=.(question>10,condition)] |> 
   melt(id.vars = c("question","condition"),variable.name = "level",variable.factor=F)
 eldat <- eldat[level != "wbar"]
 # setnames(eldat,"cond_evidence","condition")
 eldat <- aggsummlabels(eldat)
 eldat[(condition == "Defenseless" & level %in% c("Ambiguous","Exculpatory","Combined")),value:=NA]
-eldat[,period:=(function(x) factor(c("Start","End"),levels = c("Start","End"))[x+1])(question/30)]
+eldat[,period:=(function(x) factor(c("Start","End"),levels = c("Start","End"))[x+1])(question)]
 
-lcdat <- pltdat[,.(wbar=mean(pnorm(wbar/rlfit$par$scale)*100-50)),by=.(question,condition)]
-lcplt <- ggplot(lcdat,aes(y=wbar,x=question,color=str_to_title(condition))) + geom_line() + 
-  scale_color_brewer(NULL,palette = "Dark2") + xlab("Case #") + ylab("Expected strength (points)")
+lcdat <- pltdat[,.(`Truncation penalty`=mean(pnorm(truncbonus/rlfit$par$scale)*100-50),
+                   `Average evidence weight`=mean(pnorm(wbar/rlfit$par$scale)*100-50)),
+                by=.(question,condition)]
+lcplt <- melt(lcdat,id.vars = c("question","condition")) |> 
+  ggplot(aes(y=value,x=question,color=str_to_title(condition))) + geom_line() + facet_wrap(vars(variable),nrow=1,scales="free_y") + 
+  scale_color_brewer(NULL,palette = "Dark2") + xlab("Case #") + ylab("Case strength (points)")
 
 
 eldat[,value:=pnorm(value/rlfit$par$scale)*100]
@@ -257,7 +277,7 @@ prepostplt <- ggplot(eldat[(level!="Combined")],aes(y=value,color=condition,x=pe
   geom_point(position = position_dodge(width=0.5),size = 2) + geom_line(position = position_dodge(width=0.5)) +
   geom_hline(data=data.table(y=c(0,NA),notbl=c(T,F)),aes(yintercept=y)) + 
   scale_color_manual(NULL,breaks=c("Balanced","Credible","Defenseless"),values = RColorBrewer::brewer.pal(3,"Dark2")) + 
-  scale_shape_manual(NULL,labels=c("Learning Start","Learning End"), values=c(Start="square",End="triangle")) +
+  scale_shape_manual(NULL,labels=c("Early","Late"), values=c(Start="square",End="triangle")) +
   scale_y_continuous("Case strength (points)",breaks=seq(-10,70,10)) + facet_grid(notbl ~ level,switch = "x",scales = "free_y", space = "free") + 
   scale_x_discrete(NULL,label=NULL) + theme(strip.text.y = element_blank(),panel.spacing.x = unit(-1,"lines"), panel.spacing.y = unit(1,"lines"))
 
@@ -400,6 +420,18 @@ cap_intervene_bard_summary <- rbind(
 ggplot(cap_intervene_bard_summary,aes(y=mean,ymin=lb,ymax=ub,x=capped,color=cond,group=cond)) + geom_pointrange(position = position_dodge(width=.5)) + 
   facet_wrap(vars(valence),scales="free",strip.position = "bottom") + geom_line(position = position_dodge(width=.5)) + scale_color_brewer(NULL,palette = "Dark2") +
   scale_x_discrete(NULL,labels=c("Pre-inst.","Post-inst.")) + ylab("Guilt judgment (log odds)") + theme(strip.placement = "outside")
+
+##### Direct comparison v2 ####
+bdat_cap <- merge(ldat_cap,makebalancedat(ldat_cap),by=c("uid","scenario"))
+bdat_cap[,nev:=n_exculp + n_inculp + n_ambig]
+bdat_cap[,evconf:=paste0(physical,document,witness,character)]
+head2head <- (bdat_cap[,mean(rating),by=.(epoch=cut_interval(question,3),cond_capstone,cond_evidence,evconf,nev)] |> 
+                dcast(epoch+cond_capstone+evconf+nev ~ cond_evidence)
+)[!is.na(credible)]
+levels(head2head$epoch) <-  c("Early pre-instruction","Late pre-instruction","Post-instruction")
+ggplot(head2head,aes(y=credible-balanced,x=nev)) + geom_point() + facet_wrap(vars(epoch),labeller = ) + geom_smooth(method="lm") + 
+  xlab("Pieces of observed evidence") + ylab("Credible - balanced ratings (points)")
+
 
 ##### Mini-mega figure ####
 fig4 <- plot_grid(ggdraw() + draw_image(paste0(figpath,"task3.png")) + theme(plot.margin = margin(1,1,1,1,unit="lines")),

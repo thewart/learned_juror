@@ -155,8 +155,15 @@ alpha_scen_resp_diff <- get_alpha_scen_resp(rfit_cond$credible) - get_alpha_scen
 
 ##### learning model ####
 rldat <- makestanrldat(ldat_cond)
-rlmodel <- stan_model("/models/refcase_transfunc1_flat.stan")
-rlfit <- optimizing(rlmodel,rldat,as_vector=F)
+rlmodel <- stan_model("models/learnedjuror_truncated_soft_sym.stan")
+maxval <- -Inf
+for (i in 1:20) {
+  rlcand <- optimizing(rlmodel,rldat,as_vector=F)
+  if (rlcand$value > maxval) {
+    rlfit <- rlcand
+    maxval <- rlfit$value
+  }
+}
 
 #### Experiment 2b ####
 
@@ -212,4 +219,4 @@ bfit_cap <- sampling(intervention_bardmodel,standat,iter=1000,warmup=500,chains=
                      pars=c(basepars,interpars))
 bfit_cap <- recover_types(bfit_cap,standat$ref)
 
-
+ 

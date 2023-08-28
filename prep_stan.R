@@ -96,6 +96,15 @@ makestandat <- function(dat,interact=F,binresp=F,cond=NULL,levelref=T) {
   return(standat)
 }
 
+makestanrldat <- function(ldat, rescale=F) {
+  standat <- makestandat(ldat)
+  standat$Trial <- ldat$question + 1
+  standat$Cond <- ldat[,ordered(cond_evidence) %>% as.numeric()]
+  standat$m <- rowSums(standat$X)
+  if (rescale) standat$Y <- scale(standat$Y) %>% as.vector()
+  return(standat)
+}
+
 makebalancedat <- function(dat) {
   return(dat[,.(n_exculp=str_detect(sapply(.(physical,document,witness,character),as.character),"ex") %>% sum(),
                                          n_inculp=str_detect(sapply(.(physical,document,witness,character),as.character),"in") %>% sum(),

@@ -29,11 +29,15 @@ transformed data {
   int Ncond = max(Cond);
   real I = D/(2.*(U-L));
   real<lower=0,upper=1> Q[N];
-  int I_exc[N];
+  real N_exc[N];
+  real N_inc[N];
+  real N_amb[N];
   
   for (i in 1:N) {
     Q[i] = (Y[i]-L)/(U-L);
-    I_exc[i] = (X[i][1] + X[i][4] + X[i][7] + X[i][10]) > 0;
+    N_exc[i] = X[i][1] + X[i][4] + X[i][7] + X[i][10];
+    N_inc[i] = X[i][3] + X[i][6] + X[i][9] + X[i][11];
+    N_amb[i] = X[i][2] + X[i][5] + X[i][8];
   }
 }
 
@@ -45,7 +49,8 @@ parameters {
   real<lower=0> nu_0; //nhat intercept
   real<lower=0> nu_1; //nhat slope
   real psi_0; //truncation prob intercept
-  real psi_1; //truncation prob slope
+  real psi_sup; //truncation prob slope for suppressed evidence type
+  real psi_nsup; //truncation prob slope for nonsuppressed type
   real gamma; //truncation bonus
 }
 
@@ -55,8 +60,9 @@ transformed parameters {
   real trunc_bonus[N];
   
   {
-    int I_exc_cum;
-    real m_sum;
+    real N_exc_cum;
+    real N_inc_cum;
+    real N_amb_cum;
     for (i in 1:N) {
       real W0 = mean(beta);
       real delta;
@@ -65,23 +71,25 @@ transformed parameters {
       
       if (Trial[i] == 1) {
         Wbar[i] = W0;
-        m_sum = 0;
-        I_exc_cum = 0;
+        N_exc_cum = 0;
+        N_inc_cum = 0;
+        N_amb_cum = 0;
       } else {
         if (m[i-1] == 0) delta = -Wbar[i-1];
         else delta = (X[i-1]*beta)./m[i-1] - Wbar[i-1];
         Wbar[i] = Wbar[i-1] + tau*delta;
-        m_sum = m_sum + m[i-1];
-        I_exc_cum = I_exc_cum || I_exc[i-1];
+        N_exc_cum = N_exc_cum + N_exc[i-1];
+        N_inc_cum = N_inc_cum + N_inc[i-1];
+        N_amb_cum = N_amb_cum + N_amb[i-1];
       }
       
-      trunc_bonus[i] = I_exc_cum ? 0 : inv_logit(psi_0 + psi_1*m_sum) * gamma;
+      trunc_bonus[i] = (inv_logit(psi_0 + psi_nsup*N_inc_cum + psi_sup*N_exc_cum) - inv_logit(psi_0 + psi_sup*N_inc_cum + psi_nsup*N_exc_cum)) * gamma;
       nhat = nu_0 + nu_1*m[i];
       eta[i] = X[i]*beta + (nhat-m[i])*(Wbar[i] + trunc_bonus[i]);
     }
   }
-  
 }
+
 model {
   for (i in 1:N) {
     if (Y[i] == L)
