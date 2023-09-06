@@ -9,7 +9,7 @@ evcond <- c("balanced","credible","defenseless")
 ratecond <- c("without","with")
 
 evidscheme <- c("Baseline"="black","Inculpatory"="#ba4040ff","Exculpatory"="#406bbaff", "Ambiguous"="#765884ff")
-condscheme <- c("Balanced"="#69598bff","Credible"="#914f6abb", "Defenseless"="#ba4040ff")
+condscheme <- c("Balanced"="#69598bff","Credible"="#904f6aff", "Defenseless"="#ba4040ff")
 theme_set(theme_minimal_grid(font_size = 12, font_family = extrafont::choose_font("Arial")))
 lsz <- 14
 figpath <- "../figures/"
@@ -74,16 +74,6 @@ effdt <- combine_ab(rfit,"mu_alpha_resp","mu_beta_resp") %>% post_summary_dt() %
 weights_plt <- ggplot(effdt,aes(y=mean,x=type,color=level)) + geom_pointrange(aes(ymin=lb,ymax=ub),position = position_dodge(width=0.3)) +
   xlab("Evidence type") + ylab("Points") + geom_hline(yintercept = 0) +
   scale_color_manual("Evidence valence:",breaks = names(evidscheme)[-1],values=evidscheme) + scale_x_discrete(drop=F)
-
-# weights_plt %+% effdt[level=="inculpatory"] + ylim(layer_scales(weights_plt)$y$get_limits())
-# ggsave(paste0(figpath,"subweights1.pdf"), width = 8, height = 4,
-#        weights_plt %+% effdt[level=="inculpatory"] + ylim(layer_scales(weights_plt)$y$get_limits()))
-# ggsave(paste0(figpath,"subweights2.pdf"), width = 8, height = 4,
-#        weights_plt %+% effdt[level %in% c("inculpatory","exculpatory")] + ylim(layer_scales(weights_plt)$y$get_limits()))
-# ggsave(paste0(figpath,"subweights3.pdf"), width = 8, height = 4,
-#        weights_plt %+% effdt[level!="baseline"] + ylim(layer_scales(weights_plt)$y$get_limits()))
-# ggsave(paste0(figpath,"weights.pdf"), width = 8, height = 4, weights_plt)
-
 
 ##### scenario effects ####
 samps <- extract(rfit,c("mu_alpha","mu_beta","alpha_scen","beta_scen","mu_scale","sigma_scale"))
@@ -225,7 +215,7 @@ e2maineff_samps <- (gather_draws(rfit_cond,mu_alpha_resp[cond],mu_beta_resp[cond
 e2maineff <- rbind(weights_within_valence(e2maineff_samps),
                    average_weights(e2maineff_samps)[cond!="Defenseless"])
 e2maineff[,notbaseline:=valence!="Baseline"]
-e2weights_plt <- weights_by_cond_plot(e2maineff) + facet_wrap(vars(notbaseline),ncol=1,scales="free_y",drop=F) + 
+e2weights_plt <- weights_by_cond_plot(e2maineff,colorscale = condscheme) + facet_wrap(vars(notbaseline),ncol=1,scales="free_y",drop=F) + 
   scale_y_continuous("Case strength (points)",breaks=seq(-10,70,10)) + theme(axis.text.x=element_text(angle=30,hjust=1),strip.text.x = element_blank(),panel.spacing = unit(1,"lines"))
 
 
