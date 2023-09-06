@@ -11,6 +11,8 @@ ratecond <- c("without","with")
 evidscheme <- c("Baseline"="black","Inculpatory"="#ba4040ff","Exculpatory"="#406bbaff", "Ambiguous"="#765884ff")
 condscheme <- c("Balanced"="#69598bff","Credible"="#904f6aff", "Defenseless"="#ba4040ff")
 theme_set(theme_minimal_grid(font_size = 12, font_family = extrafont::choose_font("Arial")))
+update_geom_defaults("pointrange",list(shape=15,size=0.7))
+evidshape <- 16
 lsz <- 14
 figpath <- "../figures/"
 
@@ -71,7 +73,7 @@ evconfig_plt <- ggplot(pphat,aes(y=Yhat,x=rating)) + geom_point() + geom_abline(
 
 #### Evidence weights ####
 effdt <- combine_ab(rfit,"mu_alpha_resp","mu_beta_resp") %>% post_summary_dt() %>% label_dt()
-weights_plt <- ggplot(effdt,aes(y=mean,x=type,color=level)) + geom_pointrange(aes(ymin=lb,ymax=ub),position = position_dodge(width=0.3)) +
+weights_plt <- ggplot(effdt,aes(y=mean,x=type,color=level)) + geom_pointrange(aes(ymin=lb,ymax=ub),position = position_dodge(width=0.3),shape=evidshape) +
   xlab("Evidence type") + ylab("Points") + geom_hline(yintercept = 0) +
   scale_color_manual("Evidence valence:",breaks = names(evidscheme)[-1],values=evidscheme) + scale_x_discrete(drop=F)
 
