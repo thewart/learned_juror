@@ -8,7 +8,8 @@ source("prep_stan.R")
 evcond <- c("balanced","credible","defenseless")
 ratecond <- c("without","with")
 
-colorscheme <- c("Baseline"="black","Inculpatory"="#ba4040ff","Exculpatory"="#406bbaff", "Ambiguous"="#765884ff")
+evidscheme <- c("Baseline"="black","Inculpatory"="#ba4040ff","Exculpatory"="#406bbaff", "Ambiguous"="#765884ff")
+condscheme <- c("Balanced"="#69598bff","Credible"="#914f6abb", "Defenseless"="#ba4040ff")
 theme_set(theme_minimal_grid(font_size = 12, font_family = extrafont::choose_font("Arial")))
 lsz <- 14
 figpath <- "../figures/"
@@ -23,7 +24,7 @@ load("../analysis/exp3_fits.Rdata")
 diff_plt <- ggplot(marginaldiff,aes(y=mean,x=evbal,ymin=lb,ymax=ub,color=type,shape=source,linetype=source)) + 
   geom_line(position = position_dodge(width=0.5)) + geom_pointrange(position = position_dodge(width=0.5),linetype=1) + 
   geom_hline(yintercept = 0) + ylab("Change in points") + xlab("Evidence balance") +
-  scale_color_manual(values=colorscheme[c(2,3)], guide="none") + scale_shape_discrete("Source:") + scale_linetype_discrete("Source:") +
+  scale_color_manual(values=evidscheme[c(2,3)], guide="none") + scale_shape_discrete("Source:") + scale_linetype_discrete("Source:") +
   coord_cartesian(clip = "off",ylim=c(-18,18),xlim=c(-3.1,3.1)) + 
   annotate("text",x=-2.5,y=-24,label="\u27F5 Exculpatory",fontface="italic",size=3) + 
   annotate("text",x=2.5,y=-24,label="Inculpatory \u27F6",fontface="italic",size=3)
@@ -72,7 +73,7 @@ evconfig_plt <- ggplot(pphat,aes(y=Yhat,x=rating)) + geom_point() + geom_abline(
 effdt <- combine_ab(rfit,"mu_alpha_resp","mu_beta_resp") %>% post_summary_dt() %>% label_dt()
 weights_plt <- ggplot(effdt,aes(y=mean,x=type,color=level)) + geom_pointrange(aes(ymin=lb,ymax=ub),position = position_dodge(width=0.3)) +
   xlab("Evidence type") + ylab("Points") + geom_hline(yintercept = 0) +
-  scale_color_manual("Evidence valence:",breaks = names(colorscheme)[-1],values=colorscheme) + scale_x_discrete(drop=F)
+  scale_color_manual("Evidence valence:",breaks = names(evidscheme)[-1],values=evidscheme) + scale_x_discrete(drop=F)
 
 # weights_plt %+% effdt[level=="inculpatory"] + ylim(layer_scales(weights_plt)$y$get_limits())
 # ggsave(paste0(figpath,"subweights1.pdf"), width = 8, height = 4,

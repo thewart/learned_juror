@@ -411,12 +411,12 @@ parse_capstone <- function(X) {
   return(X)
 }
 
-weights_by_cond_plot <- function(X,bard=F) {
+weights_by_cond_plot <- function(X,colorscale,bard=F) {
   ytitle <- "Case strength (points)"
   if (bard) ytitle <- "Guilty judgment (log odds)"
   plt <- ggplot(X, aes(x=valence,y=mean,color=cond)) + geom_pointrange(aes(ymin=lb,ymax=ub),position = position_dodge(width=0.3)) + 
     geom_hline(data=data.table(y=c(0,NA),notbaseline=c(T,F)),aes(yintercept=y)) +
-    xlab(NULL) + scale_color_brewer(NULL,palette = "Dark2") + scale_y_continuous(ytitle) + theme(axis.text.x=element_text(angle=30,hjust=1))
+    xlab(NULL) + scale_color_manual(NULL,breaks=names(colorscale),labels=colorscale) + scale_y_continuous(ytitle) + theme(axis.text.x=element_text(angle=30,hjust=1))
 }
 
 weights_within_valence <- function(X) return(X[,mean(.value),by=.(cond,valence,.draw)][,post_summary_dt(V1),by=.(cond,valence)])
