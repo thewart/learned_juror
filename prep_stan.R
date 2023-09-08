@@ -89,8 +89,16 @@ makestandat <- function(dat,interact=F,binresp=F,cond=NULL,levelref=T) {
   }
   
   if (levelref) {
-    standat$ref <- list(uid=factor_inorder(unique(dat$uid)),evidence=factor_inorder(colnames(X)))
-    if (!is.null(cond)) standat$ref$cond <- factor_inorder(unique(c))
+    standat$ref <- list(uid=factor_inorder(unique(dat$uid)), evidence=factor_inorder(colnames(X)))
+    if (!is.null(cond)) {
+      standat$ref$cond <- factor_inorder(unique(c))
+      asscond <- vector(length = standat$Nsubj)
+      for (i in 1:standat$Nsubj) {
+        iuid <- standat$ref$uid[i]
+        asscond[i] <- c[match(iuid, dat$uid)]
+      }
+      standat$ref$asscond <- factor_inorder(asscond)
+    }
   }
   
   return(standat)

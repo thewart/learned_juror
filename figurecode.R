@@ -75,7 +75,7 @@ evconfig_plt <- ggplot(pphat,aes(y=Yhat,x=rating)) + geom_point() + geom_abline(
 effdt <- combine_ab(rfit,"mu_alpha_resp","mu_beta_resp") %>% post_summary_dt() %>% label_dt()
 weights_plt <- ggplot(effdt,aes(y=mean,x=type,color=level)) + geom_pointrange(aes(ymin=lb,ymax=ub),position = position_dodge(width=0.3),shape=evidshape) +
   xlab("Evidence type") + ylab("Points") + geom_hline(yintercept = 0) +
-  scale_color_manual("Evidence valence:",breaks = names(evidscheme)[-1],values=evidscheme) + scale_x_discrete(drop=F)
+  scale_color_manual("Evidence valence",breaks = names(evidscheme)[-1],values=evidscheme) + scale_x_discrete(drop=F)
 
 ##### scenario effects ####
 samps <- extract(rfit,c("mu_alpha","mu_beta","alpha_scen","beta_scen","mu_scale","sigma_scale"))
@@ -150,9 +150,9 @@ foo <- ldat_cond[,.(rating,scenario,cond_evidence,uid),.(paste0(physical,documen
 juh <- foo[paste0 %in% foo[cond_evidence=="credible",unique(paste0)], mean(rating),by=.(paste0,cond_evidence)]
 juh <- rbind(dcast(juh[cond_evidence!="defenseless"],paste0 ~ cond_evidence)[,type:="Credible"],
              dcast(juh[cond_evidence!="credible"],paste0 ~ cond_evidence)[!is.na(defenseless)][,type:="Defenseless"],use.names=F)
-dcplt <- ggplot(juh,aes(y=credible,x=balanced,color=type)) + geom_point() + geom_abline() + 
+dcplt <- ggplot(juh,aes(y=credible-balanced,x=balanced,color=type)) + geom_point() + geom_hline(yintercept = 0) + geom_smooth(span=1,color="black") + 
   xlab("Balanced context (points)") + ylab("Unbalanced context (points)") + 
-  scale_color_manual(NULL,values=RColorBrewer::brewer.pal(3,"Dark2")[-1])
+  scale_color_manual(NULL,values=condscheme[-1])
 
 #### Time trend ####
 bdat_cond <- merge(ldat_cond,makebalancedat(ldat_cond),by=c("uid","scenario"))
