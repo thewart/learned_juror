@@ -54,7 +54,6 @@ data {
   int<lower=0> Subj[N];  // subject corresponding to each rating
   int<lower=0> Scen[N];  // case corresponding to each rating
   int<lower=0> Cond[N];  // condition for each rating
-  int<lower=0> AssCond[Nsubj]; //condition assignment for each subject 
   // int<lower=1> K;    //components of mixture transfer function
 }
 
@@ -151,9 +150,5 @@ generated quantities {
   for (c in 1:Ncond) {
     mu_alpha_resp[c] = Phi(mu_alpha[c]/exp(mu_scale + pow(sigma_scale,2)/2))*(U-L) + L;
     for (p in 1:P) mu_beta_resp[c][p] = (Phi(mu_beta[c][p]/exp(mu_scale + pow(sigma_scale,2)/2)) - 0.5)*(U-L) + L;
-  }
-  for (s in 1:Nsubj) {
-    alpha_subj_resp[s] = Phi((mu_alpha[AssCond[s]] + alpha_subj[s]) / scale_subj[s])*(U-L) + L;
-    for (p in 1:P) beta_subj_resp[s][p] = (Phi((mu_beta[AssCond[s]][p] + beta_subj[s]) / scale_subj[s]) - 0.5)*(U-L) + L;
   }
 }

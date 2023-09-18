@@ -9,9 +9,9 @@ evcond <- c("balanced","credible","defenseless")
 ratecond <- c("without","with")
 
 evidscheme <- c("Baseline"="black","Inculpatory"="#ba4040ff","Exculpatory"="#406bbaff", "Ambiguous"="#765884ff")
-condscheme <- c("Balanced"="#69598bff","Credible"="#904f6aff", "Defenseless"="#ba4040ff")
+condscheme <- c("Balanced"="#994DA0","Credible"="#F87EBE", "Defenseless"="#E60026")
 theme_set(theme_minimal_grid(font_size = 12, font_family = extrafont::choose_font("Arial")))
-update_geom_defaults("pointrange",list(shape=15,size=0.7))
+update_geom_defaults("pointrange",list(shape=19,size=0.5))
 evidshape <- 16
 lsz <- 14
 figpath <- "../figures/"
@@ -212,14 +212,19 @@ trendplt <- ggplot(trendat,aes(y=est,x=question,color=variable,fill=variable)) +
   ylab("Points") + xlab("Case #")
 
 #### Evidence weights by context ####
-e2maineff_samps <- (gather_draws(rfit_cond,mu_alpha_resp[cond],mu_beta_resp[cond,evidence]) |> 
-                      setDT() |> parse_evidence())[,cond:=set_factor_context(cond)] |> cull_defenseless()
-e2maineff <- rbind(weights_within_valence(e2maineff_samps),
-                   average_weights(e2maineff_samps)[cond!="Defenseless"])
-e2maineff[,notbaseline:=valence!="Baseline"]
-e2weights_plt <- weights_by_cond_plot(e2maineff,colorscale = condscheme) + facet_wrap(vars(notbaseline),ncol=1,scales="free_y",drop=F) + 
-  scale_y_continuous("Case strength (points)",breaks=seq(-10,70,10)) + theme(axis.text.x=element_text(angle=30,hjust=1),strip.text.x = element_blank(),panel.spacing = unit(1,"lines"))
+# e2maineff_samps <- (gather_draws(rfit_cond,mu_alpha_resp[cond],mu_beta_resp[cond,evidence]) |> 
+#                       setDT() |> parse_evidence())[,cond:=set_factor_context(cond)] |> cull_defenseless()
+# e2maineff <- rbind(weights_within_valence(e2maineff_samps),
+#                    average_weights(e2maineff_samps)[cond!="Defenseless"])
+# e2maineff[,notbaseline:=valence!="Baseline"]
+# e2weights_plt <- weights_by_cond_plot(e2maineff,colorscale = condscheme) + facet_wrap(vars(notbaseline),ncol=1,scales="free_y",drop=F) + 
+#   scale_y_continuous("Case strength (points)",breaks=seq(-10,70,10)) + theme(axis.text.x=element_text(angle=30,hjust=1),strip.text.x = element_blank(),panel.spacing = unit(1,"lines"))
 
+e2subjeff <- subjeff_cond(rfit_cond,ldat_cond[,.(cond=cond_evidence[1]),by=uid])
+e2maineff <- maineff_cond(rfit_cond)
+ggplot(e2maineff,aes(y=mean,x=cond,color=cond)) + geom_point(data=e2subjeff,alpha=0.2,position = position_jitter(width = .1,height=0)) + geom_pointrange(aes(ymin=lb,ymax=ub,fill=cond),color="black",shape=22) + 
+  facet_wrap(vars(valence),scales="free",nrow=1,strip.position = "bottom") + scale_x_discrete(NULL,breaks=NULL) + 
+  scale_y_continuous("Evidence weight (points)",breaks=scales::extended_breaks(n=6)) + scale_color_manual("Condition",values=condscheme) + scale_fill_manual("Condition",values=condscheme)
 
 #### Case strength distributions ####
 foo <- merge(ldat_cond,makebalancedat(ldat_cond),by=c("uid","scenario"))
@@ -237,54 +242,64 @@ fig2 <- plot_grid(ucplt + scale_colour_brewer(guide=NULL,palette = "Dark2") + th
 ggsave(paste0(figpath,"figure2.pdf"),fig2,cairo_pdf,width = 9,height = 6)
 
 #### Learning model ####
-pltdat <- cbind(ldat_cond[,.(question,condition=cond_evidence)],
+pltdat <- cbind(ldat_cond[,.(question,cond=cond_evidence)],
                 Baseline=rlfit$par$baseline,
                 Inculpatory=rlfit$par$inceff,
                 Exculpatory=rlfit$par$exceff,
                 Ambiguous=rlfit$par$ambeff,
-                Combined=rlfit$par$combined,
                 wbar=rlfit$par$Wbar,
                 truncbonus=rlfit$par$trunc_bonus)
+pltdat[,cond:=set_factor_context(cond)]
 
-eldat <- pltdat[question %in% 0 | question %in% 30,lapply(.SD,mean),by=.(question>10,condition)] |> 
-  melt(id.vars = c("question","condition"),variable.name = "level",variable.factor=F)
-eldat <- eldat[level != "wbar"]
-# setnames(eldat,"cond_evidence","condition")
-eldat <- aggsummlabels(eldat)
-eldat[(condition == "Defenseless" & level %in% c("Ambiguous","Exculpatory","Combined")),value:=NA]
+eldat <- pltdat[question %in% 0 | question %in% 30,lapply(.SD,mean),by=.(question>10,cond)] |> 
+  melt(id.vars = c("question","cond"),variable.name = "valence",variable.factor=F)
+eldat <- eldat[!(valence %in% c("wbar","truncbonus"))] |> cull_defenseless()
+# setnames(eldat,"cond_evidence","cond")
+# eldat <- aggsummlabels(eldat)
+# eldat[(cond == "Defenseless" & level %in% c("Ambiguous","Exculpatory","Combined")),value:=NA]
 eldat[,period:=(function(x) factor(c("Start","End"),levels = c("Start","End"))[x+1])(question)]
 
-lcdat <- pltdat[,.(`Truncation penalty`=mean(pnorm(truncbonus/rlfit$par$scale)*100-50),
-                   `Average evidence weight`=mean(pnorm(wbar/rlfit$par$scale)*100-50)),
-                by=.(question,condition)]
-lcplt <- melt(lcdat,id.vars = c("question","condition")) |> 
-  ggplot(aes(y=value,x=question,color=str_to_title(condition))) + geom_line() + facet_wrap(vars(variable),nrow=1,scales="free_y") + 
-  scale_color_brewer(NULL,palette = "Dark2") + xlab("Case #") + ylab("Case strength (points)")
-
+lcdat <- pltdat[,.(`Suppression penalty`=mean(pnorm(truncbonus/rlfit$par$scale)*100-50),
+                   `Observed weight`=mean(pnorm(wbar/rlfit$par$scale)*100-50),
+                   `Unobserved weight`=mean(pnorm((wbar+truncbonus)/rlfit$par$scale)*100-50)),
+                by=.(question,cond)]
+lcdat <- melt(lcdat,id.vars = c("question","cond"))
+lcdat[,variable:=factor(variable,c("Unobserved weight","Observed weight","Suppression penalty"))]
+# ggplot(lcdat,aes(y=value,x=question,color=str_to_title(cond))) + geom_line() + facet_wrap(vars(variable),nrow=1,scales="free_y") + 
+#   scale_color_manual("Condition",breaks=c("Balanced","Credible","Defenseless"),values=condscheme) + xlab("Case #") + ylab("Case strength (points)")
+ggplot(lcdat,aes(y=value,x=question,linetype=variable,color=cond)) + geom_line() + facet_wrap(vars(cond),nrow=1) + 
+  scale_color_manual("Condition",values=condscheme) + xlab("Case #") + ylab("Case strength (points)") + geom_hline(yintercept = 0)
 
 eldat[,value:=pnorm(value/rlfit$par$scale)*100]
-eldat[level!="Baseline",value:=value-50]
-eldat[,notbl:= level!="Baseline"]
-eldat[,condition:=factor(condition,levels = c("Credible","Defenseless","Balanced"))]
-prepostplt <- ggplot(eldat[(level!="Combined")],aes(y=value,color=condition,x=period,shape=period,group=condition)) +
-  geom_point(position = position_dodge(width=0.5),size = 2) + geom_line(position = position_dodge(width=0.5)) +
-  geom_hline(data=data.table(y=c(0,NA),notbl=c(T,F)),aes(yintercept=y)) + 
-  scale_color_manual(NULL,breaks=c("Balanced","Credible","Defenseless"),values = RColorBrewer::brewer.pal(3,"Dark2")) + 
-  scale_shape_manual(NULL,labels=c("Early","Late"), values=c(Start="square",End="triangle")) +
-  scale_y_continuous("Case strength (points)",breaks=seq(-10,70,10)) + facet_grid(notbl ~ level,switch = "x",scales = "free_y", space = "free") + 
-  scale_x_discrete(NULL,label=NULL) + theme(strip.text.y = element_blank(),panel.spacing.x = unit(-1,"lines"), panel.spacing.y = unit(1,"lines"))
+eldat[valence!="Baseline",value:=value-50]
+# eldat[,notbl:= level!="Baseline"]
+eldat[,cond:=factor(cond,levels = c("Credible","Defenseless","Balanced"))]
+eldat[,valence:=set_factor_valence(valence)]
+pev <- ggplot(eldat[valence!="Baseline"],aes(y=value,color=cond,x=period,group=cond)) +geom_point(position = position_dodge(width=0.5),size = 2) + 
+  geom_line(position = position_dodge(width=0.5)) + facet_wrap(vars(valence),strip.position = "bottom") + 
+  ylab(NULL) + xlab(NULL) + scale_color_manual("Condition",breaks=c("Balanced","Credible","Defenseless"),values=condscheme)
+pbase <- ggplot(eldat[valence=="Baseline"],aes(y=value,color=cond,x=period,group=cond)) + geom_point(position = position_dodge(width=0.5),size = 2) + 
+  geom_line(position = position_dodge(width=0.5)) + facet_wrap(vars(valence),strip.position = "bottom") + 
+  ylab("Effective weight (points)") + xlab(NULL) + scale_color_manual("Condition",breaks=c("Balanced","Credible","Defenseless"),values=condscheme,guide=NULL)
 
-row1 <- plot_grid(ggdraw() + draw_image(paste0(figpath,"learner_juror.png")) + theme(plot.margin = margin(t=1,b=1,unit="lines")),
-                  ggdraw() + draw_image(paste0(figpath,"expectations.png")) + theme(plot.margin = margin(t=1,b=1,unit="lines")),
-                  rel_widths = c(.6,1), labels = "auto", label_size = lsz, nrow=1)
-row2 <- plot_grid(
-  lcplt + scale_colour_brewer(guide=NULL,palette = "Dark2") + theme(plot.margin = margin(t=2,l=2,r=2,unit = "lines")),
-  prepostplt + theme(legend.position = "right"),
-  labels = c("c","d"), nrow=1, rel_widths = c(0.6,1), label_size = lsz)
+# prepostplt <- ggplot(eldat,aes(y=value,color=cond,x=period,shape=period,group=cond)) +
+#   geom_point(position = position_dodge(width=0.5),size = 2) + geom_line(position = position_dodge(width=0.5)) + 
+#   scale_color_manual(NULL,breaks=c("Balanced","Credible","Defenseless"),values = RColorBrewer::brewer.pal(3,"Dark2")) + 
+#   scale_shape_manual(NULL,labels=c("Early","Late"), values=c(Start="square",End="triangle")) +
+#   scale_y_continuous("Effective weight (points)") + facet_wrap(vars(level),scales = "free") + 
+#   scale_x_discrete(NULL,label=NULL) + theme(strip.text.y = element_blank(),panel.spacing.x = unit(-1,"lines"), panel.spacing.y = unit(1,"lines"))
+# 
+# row1 <- plot_grid(ggdraw() + draw_image(paste0(figpath,"learner_juror.png")) + theme(plot.margin = margin(t=1,b=1,unit="lines")),
+#                   ggdraw() + draw_image(paste0(figpath,"expectations.png")) + theme(plot.margin = margin(t=1,b=1,unit="lines")),
+#                   rel_widths = c(.6,1), labels = "auto", label_size = lsz, nrow=1)
+# row2 <- plot_grid(
+#   lcplt + scale_colour_brewer(guide=NULL,palette = "Dark2") + theme(plot.margin = margin(t=2,l=2,r=2,unit = "lines")),
+#   prepostplt + theme(legend.position = "right"),
+#   labels = c("c","d"), nrow=1, rel_widths = c(0.6,1), label_size = lsz)
 
-fig3 <- plot_grid(row1,row2,ncol = 1)
+# fig3 <- plot_grid(row1,row2,ncol = 1)
   
-ggsave(paste0(figpath,"figure3.pdf"),fig3,cairo_pdf,width = 9,height = 6)
+# ggsave(paste0(figpath,"figure3.pdf"),fig3,cairo_pdf,width = 9,height = 6)
 
 ##### Binary choice exp 2a&b, 3 ####
 foo <- gather_draws(bfit_rate,mu_alpha[cond],mu_beta[cond,evidence]) |> setDT() |> parse_evidence()
@@ -390,13 +405,30 @@ cap_weights_bard_plt <- weights_by_cond_plot(cap_weights_bard_summary,T)
 
 ##### capstone intervention effects ####
 # Rating
-cap_intervene_samps <- (gather_draws(rfit_cap,mu_alpha_pre_resp[cond],mu_alpha_post_resp[cond],mu_beta_ave_pre_resp[cond],mu_beta_ave_post_resp[cond]) |> 
-                       setDT())[,cond:=set_factor_context(cond)]
-cap_intervene_summary <- cap_intervene_samps[,post_summary_dt(.value),by=.(cond,.variable)] |> parse_capstone()
-cap_intervene_summary[,type:=factor(type,levels = unique(type))]
-capcrossovers_plt <- ggplot(cap_intervene_summary,aes(y=mean,ymin=lb,ymax=ub,x=capped,color=cond,group=cond)) + geom_pointrange(position = position_dodge(width=.5)) + 
-  facet_wrap(vars(type),scales="free",strip.position = "bottom") + geom_line(position = position_dodge(width=.5)) + scale_color_brewer(NULL,palette = "Dark2") +
-  scale_x_discrete(NULL,labels=c("Pre-inst.","Post-inst.")) + ylab("Case strength (points)") + theme(strip.placement = "outside")
+
+e3subjeff <- rbind(
+  cbind(subjeff_cond(rfit_cap,ldat_cap[,.(cond=cond_evidence[1]),by=uid],average_over="all",post_int=T), capped=T),
+  cbind(subjeff_cond(rfit_cap,ldat_cap[,.(cond=cond_evidence[1]),by=uid],average_over="all"), capped=F)
+)
+
+e3maineff <- rbind(
+  cbind(maineff_cond(rfit_cap,post_int=T,average_over = "all"), capped=T),
+  cbind(maineff_cond(rfit_cap,post_int=F,average_over = "all"), capped=F)
+)
+
+ggplot(e3maineff,aes(y=mean,x=capped,color=cond)) + geom_line(aes(group=cond),color="black",position = position_dodge(width=.5)) + 
+  geom_pointrange(aes(ymin=lb,ymax=ub,fill=cond),color="black",shape=22,position = position_dodge(width=.5)) +
+  geom_point(data=e3subjeff,alpha=0.2,position = position_jitterdodge(dodge.width = .5)) +
+  facet_wrap(vars(valence),scales="free",strip.position = "bottom") + scale_color_manual("Condition",values = condscheme[-3]) + scale_fill_manual("Condition",values = condscheme[-3])
+
+
+# cap_intervene_samps <- (gather_draws(rfit_cap,mu_alpha_pre_resp[cond],mu_alpha_post_resp[cond],mu_beta_ave_pre_resp[cond],mu_beta_ave_post_resp[cond]) |> 
+#                        setDT())[,cond:=set_factor_context(cond)]
+# cap_intervene_summary <- cap_intervene_samps[,post_summary_dt(.value),by=.(cond,.variable)] |> parse_capstone()
+# cap_intervene_summary[,type:=factor(type,levels = unique(type))]
+# capcrossovers_plt <- ggplot(cap_intervene_summary,aes(y=mean,ymin=lb,ymax=ub,x=capped,color=cond,group=cond)) + geom_pointrange(position = position_dodge(width=.5)) + 
+#   facet_wrap(vars(type),scales="free",strip.position = "bottom") + geom_line(position = position_dodge(width=.5)) + scale_color_brewer(NULL,palette = "Dark2") +
+#   scale_x_discrete(NULL,labels=c("Pre-inst.","Post-inst.")) + ylab("Case strength (points)") + theme(strip.placement = "outside")
 
 # BARD
 lambda_samps <- gather_draws(bfit_cap,mu_lambda[cond,type]) |> setDT()
@@ -419,8 +451,7 @@ bdat_cap <- merge(ldat_cap,makebalancedat(ldat_cap),by=c("uid","scenario"))
 bdat_cap[,nev:=n_exculp + n_inculp + n_ambig]
 bdat_cap[,evconf:=paste0(physical,document,witness,character)]
 head2head <- (bdat_cap[,mean(rating),by=.(epoch=cut_interval(question,3),cond_capstone,cond_evidence,evconf,nev)] |> 
-                dcast(epoch+cond_capstone+evconf+nev ~ cond_evidence)
-)[!is.na(credible)]
+                dcast(epoch+cond_capstone+evconf+nev ~ cond_evidence))[!is.na(credible)]
 levels(head2head$epoch) <-  c("Early pre-instruction","Late pre-instruction","Post-instruction")
 ggplot(head2head,aes(y=credible-balanced,x=nev)) + geom_point() + facet_wrap(vars(epoch),labeller = ) + geom_smooth(method="lm") + 
   xlab("Pieces of observed evidence") + ylab("Credible - balanced ratings (points)")

@@ -439,3 +439,79 @@ set_factor_rate <- function(DT) {
   DT[,rating:=factor(str_to_title(context_rate),levels=c("Without","With"))]
   return(DT)
 }
+
+set_factor_valence <- function(x) return(factor(str_to_title(x),levels = c("Baseline","Exculpatory","Ambiguous","Inculpatory")))
+
+subjeff_cond <- function(stanfit,cond_df,resp_scale=T,average_over="type",post_int=F) {
+  subj_samps <- gather_draws(stanfit,alpha_subj[uid],beta_subj[uid,evidence]) |> setDT() |> parse_evidence()
+  mu_samps <- gather_draws(stanfit,mu_alpha[cond],mu_beta[cond,evidence]) |> setDT() |> parse_evidence()
+  
+  subj_samps <- subj_samps[cond_df,on="uid"]
+  subj_samps <- subj_samps[mu_samps,on=c(".draw","cond","type","valence")]
+  subj_samps[,.value:= .value + i..value]
+  
+  if (average_over=="type") {
+    subj_samps <- subj_samps[,mean(.value),by=.(uid,cond,valence,.draw)]
+  } else if (average_over=="all") {
+    subj_samps <- subj_samps[,mean(.value),by=.(uid,cond,valence=="Baseline",.draw)]
+    subj_samps[,valence:=factor(valence,levels=c(TRUE,FALSE),labels=c("Baseline","Ave. evidence"))]
+  }
+  
+  if (post_int) {
+    int_samps <- gather_draws(stanfit,lambda_subj[uid,i]) |> setDT()
+    muint_samps <- gather_draws(stanfit,mu_lambda[cond,i]) |> setDT()
+    
+    int_samps <- int_samps[cond_df,on="uid"]
+    int_samps <- int_samps[muint_samps,on=c(".draw","cond","i")]
+    int_samps[,.value:= .value + i..value]
+    
+    subj_samps <- rbind(
+      subj_samps[valence=="Baseline"][int_samps[i==1,.(uid,.draw,int=.value)], on=c("uid",".draw")],
+      subj_samps[valence!="Baseline"][int_samps[i==2,.(uid,.draw,int=.value)], on=c("uid",".draw")]
+    )
+    subj_samps[,V1 := V1 + int]
+    subj_samps[,int := NULL]
+  }
+  
+  if (resp_scale) {
+    scale_samps <- gather_draws(stanfit,scale_subj[uid]) |> setDT()
+    subj_samps <- subj_samps[scale_samps[,.(uid,.draw,scale=.value)], on=c("uid",".draw")]
+    subj_samps[,V1:=pnorm(V1/scale)*100 - 50*(valence!="Baseline")]
+  }
+
+  subj_eff <- subj_samps[,.(cond=cond[1],mean=mean(V1)),by=.(uid,valence)]
+  
+  subj_eff[,cond:=set_factor_context(cond)]
+  return(cull_defenseless(subj_eff))
+}
+
+maineff_cond <- function(stanfit,resp_scale=T,average_over="type",post_int=F) {
+  mu_samps <- gather_draws(stanfit,mu_alpha[cond],mu_beta[cond,evidence]) |> setDT() |> parse_evidence()
+  
+  if (average_over=="type") {
+    mu_samps <- mu_samps[,mean(.value),by=.(cond,valence,.draw)]
+  } else if (average_over=="all") {
+    mu_samps <- mu_samps[,mean(.value),by=.(cond,valence=="Baseline",.draw)]
+    mu_samps[,valence:=factor(valence,levels=c(TRUE,FALSE),labels=c("Baseline","Ave. evidence"))]
+  }
+  
+  if (post_int) {
+    int_samps <- gather_draws(stanfit,mu_lambda[cond,i]) |> setDT()
+    
+    mu_samps <- rbind(
+      mu_samps[valence=="Baseline"][int_samps[i==1,.(cond,.draw,int=.value)], on=c("cond",".draw")],
+      mu_samps[valence!="Baseline"][int_samps[i==2,.(cond,.draw,int=.value)], on=c("cond",".draw")]
+    )
+    mu_samps[,V1 := V1 + int]
+    mu_samps[,int := NULL]
+  }
+  
+  if (resp_scale) {
+    scale_samps <- spread_draws(stanfit,mu_scale,sigma_scale) |> setDT()
+    mu_samps <- mu_samps[scale_samps[,.(.draw,mu_scale,sigma_scale)],on=".draw"]
+    mu_samps[,.value:=pnorm(V1/exp(mu_scale + sigma_scale^2/2))*100 - 50*(valence!="Baseline")]
+  }
+  
+  mu_samps[,cond:=set_factor_context(cond)]
+  return(mu_samps[,post_summary_dt(.value),by=.(cond,valence)] |> cull_defenseless())
+}

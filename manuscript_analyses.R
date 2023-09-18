@@ -149,15 +149,16 @@ fit_trend <- lmer(rating ~ 1 + cond_evidence*I(n_inculp-n_exculp)*question +
                     (1 + I(n_inculp-n_exculp)*question | uid) + (1|scenario) ,data=bdat_cond,REML=F)
 
 ##### Scenario-level differences ####
-expose_stan_functions(rfit_cond$balanced)
-beta_scen_resp_diff <- get_beta_scen_resp(rfit_cond$balanced) - get_beta_scen_resp(rfit_cond$credible)
-alpha_scen_resp_diff <- get_alpha_scen_resp(rfit_cond$credible) - get_alpha_scen_resp(rfit_cond$balanced)
+# expose_stan_functions(rfit_cond$balanced)
+# beta_scen_resp_diff <- get_beta_scen_resp(rfit_cond$balanced) - get_beta_scen_resp(rfit_cond$credible)
+# alpha_scen_resp_diff <- get_alpha_scen_resp(rfit_cond$credible) - get_alpha_scen_resp(rfit_cond$balanced)
 
 ##### learning model ####
 rldat <- makestanrldat(ldat_cond)
-rlmodel <- stan_model("models/learnedjuror_truncated_soft_sym.stan")
+rlmodel <- stan_model("models/learnedjuror_truncated_soft.stan")
 maxval <- -Inf
 for (i in 1:20) {
+  cat(i,"\r")
   rlcand <- optimizing(rlmodel,rldat,as_vector=F)
   if (rlcand$value > maxval) {
     rlfit <- rlcand
@@ -206,14 +207,14 @@ source("process_data.R")
 ldat_cap <- makelegaldat(scendat,subjdat,clickdat)
 
 # rating fits
-standat <- makestandat(ldat_cap,cond="cond_evidence",levelref=T)
+standat <- makestandat(ldat_cap,cond="cond_evidence")
 standat$Z <- ldat_cap[,cond_capstone]
 rfit_cap <- sampling(intervention_model,standat,iter=1000,warmup=500,chains=4,control=list(adapt_delta=0.99),
                      pars=c(basepars,interratepars,interpars))
 rfit_cap <- recover_types(rfit_cap,standat$ref)
 
 # bard fits
-standat <- makestandat(ldat_cap,binresp=T,cond="cond_evidence",levelref=T)
+standat <- makestandat(ldat_cap,binresp=T,cond="cond_evidence")
 standat$Z <- ldat_cap[,cond_capstone]
 bfit_cap <- sampling(intervention_bardmodel,standat,iter=1000,warmup=500,chains=4,control=list(adapt_delta=0.99),
                      pars=c(basepars,interpars))

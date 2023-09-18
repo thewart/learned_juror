@@ -32,6 +32,7 @@ transformed data {
   real N_exc[N];
   real N_inc[N];
   real N_amb[N];
+  // real alpha = 0;
   
   for (i in 1:N) {
     Q[i] = (Y[i]-L)/(U-L);
@@ -42,7 +43,7 @@ transformed data {
 }
 
 parameters {
-  // real alpha;
+  real alpha;
   vector[P] beta;
   real<lower=0> scale; //scale of internal transfer function
   real<lower=0,upper=1> tau;
@@ -50,9 +51,10 @@ parameters {
   real<lower=0> nu_1; //nhat slope
   real psi_0; //truncation prob intercept
   real psi_inc; //truncation prob slope
-  real psi_amb; //truncation prob slope
+  // real psi_amb; //truncation prob slope
   real psi_exc; //truncation prob slope
   real gamma; //truncation bonus
+  real W0; //starting average evidence weight
 }
 
 transformed parameters {
@@ -65,7 +67,7 @@ transformed parameters {
     real N_inc_cum;
     real N_amb_cum;
     for (i in 1:N) {
-      real W0 = mean(beta);
+      // real W0 = mean(beta);
       real delta;
       real nhat;
       real j;
@@ -86,7 +88,7 @@ transformed parameters {
       
       trunc_bonus[i] = inv_logit(psi_0 + psi_inc*N_inc_cum + psi_exc*N_exc_cum) * gamma;
       nhat = nu_0 + nu_1*m[i];
-      eta[i] = X[i]*beta + (nhat-m[i])*(Wbar[i] + trunc_bonus[i]);
+      eta[i] = alpha + X[i]*beta + (nhat-m[i])*(Wbar[i] + trunc_bonus[i]);
     }
   }
 }
@@ -110,7 +112,7 @@ generated quantities {
   real combined[N];
   
   for (i in 1:N) {
-    baseline[i] = nu_0*(Wbar[i] + trunc_bonus[i]);
+    baseline[i] = alpha + nu_0*(Wbar[i] + trunc_bonus[i]);
     exceff[i] = (beta[1] + beta[4] + beta[7] + beta[10])/4 + (nu_1-1)*(Wbar[i] + trunc_bonus[i]);
     ambeff[i] = (beta[2] + beta[5] + beta[8])/3 + (nu_1-1)*(Wbar[i] + trunc_bonus[i]);
     inceff[i] = (beta[3] + beta[6] + beta[9] + beta[11])/4 + (nu_1-1)*(Wbar[i] + trunc_bonus[i]);
