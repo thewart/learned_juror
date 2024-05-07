@@ -1,7 +1,7 @@
-makelegaldat <- function(scendat,subjdat,clickdat,fthresh=NULL) {
+makelegaldat <- function(scendat,subjdat,clickdat,pthresh=NULL) {
   msubj <- subjdat[!str_detect(uid,"test") & task_complete,uid]
   msubj <- msubj[msubj %in% subjdat[,.N,by=uid][N==1,uid]] #exclude subjects who repeated the task
-  msubj <- msubj[msubj %in% clickdat[,.N==31,by=uid][V1==T,uid]] #exclude subjects with wrong number of reponses
+  msubj <- msubj[msubj %in% clickdat[,uniqueN(scenario)==31 & .N==31,by=uid][V1==T,uid]] #exclude subjects with wrong number of reponses
   scendat <- scendat[uid %in% msubj]
   # clickdat <- clickdat[!is.na(guilty)]
   
@@ -39,9 +39,9 @@ makelegaldat <- function(scendat,subjdat,clickdat,fthresh=NULL) {
   dat[,start:=as.POSIXct(start)]
   dat[,stop:=as.POSIXct(stop)]
   
-  if (!is.null(fthresh)) {
-    dat <- merge(dat,dat[,.(fst=anova(glm(bardguilt ~ rating,family=binomial))[2,2]),by=uid])
-    dat <- dat[fst>fthresh]
+  if (!is.null(pthresh)) {
+    fail <- dat[!is.na(rating), .(cor.test(as.numeric(bardguilt), rating)$p.value, cor(as.numeric(bardguilt),rating)), by=uid][is.na(V1) | V1>pthresh | V2<0, uid]
+    dat <- dat[!(uid %in% fail)]
   }
   return(dat)
 }
@@ -134,4 +134,25 @@ transfunc_init_intervention <- function(priorscale=0.25,P=11,C=1) {
   prior$mu_lambda <- rnorm(2)
   prior$sigma_lambda <- abs(rnorm(2,0,priorscale))
   return(prior)
+}
+
+readindat <- function(whichtask, dobalance=T, pthresh=NULL) {
+  fpath <- paste0("../data/", whichtask)
+  
+  catchdat <- fread(paste0(fpath, "_catches.csv"))
+  clickdat <- fread(paste0(fpath, "_answers.csv"))
+  scendat <- fread(paste0(fpath, "_realized_scen.csv"))
+  subjdat <- fread(paste0(fpath, "_subjectinfo.csv"))[,-1,with=F]
+  subjdat[,start:=as.POSIXct(start,format="%Y-%m-%d %H:%M:%S")]
+  # issue: those who completed no catch trials will not show up
+  setkey(subjdat,"start")
+  
+  ldat <- makelegaldat(scendat, subjdat, clickdat, pthresh)
+  setkey(ldat,uid,question)
+  ldat[,evconf:=paste0(physical,document,witness,character)]
+  if (dobalance) {
+    ldat <- merge(makebalancedat(ldat),ldat,by=c("uid","scenario"))
+    ldat[, nev:= n_inculp + n_exculp + n_ambig]
+  }
+  return(ldat)
 }

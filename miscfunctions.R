@@ -394,7 +394,7 @@ parse_evidence <- function(X,baseline=T) {
   X[str_detect(evidence,"clear_ex"),valence:="Exculpatory"]
   X[str_detect(evidence,"ambiguous"),valence:="Ambiguous"]
   X[str_detect(evidence,"clear_in"),valence:="Inculpatory"]
-  X[,c(".chain",".iteration","evidence",".variable"):=NULL]
+  # X[,c(".chain",".iteration","evidence",".variable"):=NULL]
   if (baseline) X[is.na(type),c("type","valence"):="Baseline"]
   
   X[,type:=factor(type,levels=c("Baseline","Physical","Document","Witness","Character"))]
